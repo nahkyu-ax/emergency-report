@@ -1,0 +1,1491 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>상황보고 도우미</title>
+<style>
+/* ══════════════════════════════════════
+   상황보고 도우미 — 서울교통공사
+   ══════════════════════════════════════ */
+:root{
+  color-scheme: dark;
+  --bg:#001838; --header:#002d5b; --card:#07365f; --cardDark:#031f3f;
+  --field:#093058; --fieldOn:#0a3a68;
+  --line:#2a4f7a; --lineOn:#38bdf8;
+  --ink:#fff; --sub:#dceeff; --hint:#b2d7f5; --muted:#8cb4dc;
+  --blue:#0072bc; --sky:#38bdf8; --red:#ef4444; --emergency:#d32f2f;
+  --ok:#22c55e; --warn:#f59e0b;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;
+  font-size:17px;line-height:1.5;-webkit-text-size-adjust:100%}
+body{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+input,textarea{-webkit-appearance:none;appearance:none}
+
+/* ── 머리말 ── */
+.top{background:var(--header);padding:14px 18px 0}
+.top .logo{display:flex;align-items:center;gap:10px}
+.top .logo .totta{width:52px;height:52px;object-fit:contain;background:#fff;border-radius:12px;padding:3px;flex:none}
+.top .logo .mark{width:34px;height:34px;border-radius:9px;background:var(--blue);
+  display:grid;place-items:center;font-size:18px;font-weight:900;flex:none}
+.top h1{margin:0;font-size:20px;font-weight:900;letter-spacing:-.3px}
+.top .sub{margin:2px 0 0;font-size:15px;color:var(--hint)}
+.linebar{display:flex;height:5px;margin-top:12px}
+.linebar i{flex:1}
+
+/* ── 본문 ── */
+.wrap{padding:18px 18px 40px;max-width:720px;margin:0 auto}
+.sec{margin:26px 0 12px;font-size:18px;font-weight:900;color:var(--sky);
+  border-left:4px solid var(--sky);padding-left:10px;line-height:1.3}
+.sec:first-child{margin-top:4px}
+.note{font-size:15px;color:var(--hint);padding:7px 6px 2px;line-height:1.55}
+.banner{background:var(--blue);color:#fff;font-weight:800;font-size:16.5px;
+  padding:13px 14px;border-radius:10px;margin-bottom:12px;line-height:1.5}
+.banner.warn{background:#be6914}
+
+/* ── 입력칸 ── */
+.f{display:flex;align-items:stretch;background:var(--field);border-radius:10px;
+  overflow:hidden;margin-bottom:10px;position:relative}
+.f .bar{width:5px;background:var(--line);flex:none;transition:background .15s}
+.f.on .bar{background:var(--lineOn)}
+.f .in{flex:1;padding:11px 14px;min-width:0}
+.f .lab{font-size:15px;color:var(--hint);margin-bottom:3px}
+.f .val{font-size:18px;font-weight:800;word-break:break-all}
+.f .val.empty{color:var(--muted);font-weight:600}
+.f .tick{align-self:center;padding:0 14px;color:var(--lineOn);font-size:18px;font-weight:900;display:none}
+.f.on .tick{display:block}
+.f input,.f textarea{width:100%;background:none;border:0;outline:none;
+  font-size:18px;font-weight:800;padding:0;color:var(--ink)}
+.f input::placeholder,.f textarea::placeholder{color:var(--muted);font-weight:600}
+.f textarea{resize:vertical;min-height:72px;line-height:1.55}
+.f.pick{cursor:pointer}
+
+/* ── 선택지 ── */
+.chips{display:flex;flex-wrap:wrap;gap:7px;padding:10px 0 2px}
+.chips button{background:var(--field);border:2px solid var(--line);border-radius:999px;
+  padding:9px 15px;font-size:16.5px;font-weight:700;color:var(--sub)}
+.chips button[aria-pressed="true"]{background:var(--sky);border-color:#fff;color:#00264d;font-weight:900}
+.chips button[aria-pressed="true"]::before{content:"✓ "}
+.fixed{display:flex;align-items:center;gap:10px;background:var(--field);border-radius:10px;padding:12px 14px;margin-bottom:10px}
+.fixed .lab{font-size:15px;color:var(--hint);flex:none}
+.fixed .val{font-size:18px;font-weight:800}
+.fixed .val.empty{color:var(--muted);font-weight:600;font-size:15px}
+#lineChips button{border-color:var(--lc);opacity:.55}
+#lineChips button[aria-pressed="true"]{background:var(--lc);border-color:#fff;opacity:1;box-shadow:0 0 0 3px var(--lc)}
+/* 시·분 휠 */
+.whs{position:relative;display:flex;justify-content:center;align-items:center;gap:6px;margin:4px 0 16px}
+.whs::before{content:"";position:absolute;left:50%;width:220px;transform:translateX(-50%);top:50px;height:50px;
+  border-top:2px solid var(--sky);border-bottom:2px solid var(--sky);pointer-events:none}
+.whs b{font-size:28px;font-weight:900;color:var(--hint)}
+.wh{height:150px;width:96px;overflow-y:scroll;scroll-snap-type:y mandatory;scrollbar-width:none;overscroll-behavior:contain}
+.wh::-webkit-scrollbar{display:none}
+.wh div{height:50px;line-height:50px;text-align:center;font-size:24px;color:var(--muted);scroll-snap-align:center}
+.wh div.sp{scroll-snap-align:none}
+.wh div.sel{color:#fff;font-weight:900;font-size:32px}
+/* 목록형 선택 */
+.olist{display:flex;flex-direction:column;background:var(--bg);border:2px solid var(--line);border-radius:12px;overflow:hidden}
+.olist button{text-align:left;padding:16px 18px;font-size:19px;font-weight:800;color:var(--ink);border-bottom:1px solid var(--line)}
+.olist button:last-child{border-bottom:0}
+.olist button[aria-pressed="true"]{background:var(--sky);color:#00264d}
+.olist button[aria-pressed="true"]::after{content:"  ✓"}
+.sheet select.sel{width:100%;background:var(--bg);color:var(--ink);border:2px solid var(--line);border-radius:10px;
+  padding:14px;font-size:19px;font-weight:800;margin-bottom:12px;-webkit-appearance:none;appearance:none}
+.sheet .slab{font-size:15px;color:var(--hint);font-weight:800;margin:4px 2px 6px}
+body,.out{word-break:keep-all;overflow-wrap:break-word}
+.box{background:var(--cardDark);border-radius:10px;padding:4px 2px;margin-bottom:10px}
+.miss{outline:3px solid #ff9f1c;outline-offset:2px;border-radius:10px}
+.f.seg .in{width:100%}
+.segs{display:flex;gap:6px;margin-top:6px}
+.segs button{flex:1 1 0;min-width:0;padding:10px 2px;border:2px solid #8fd3ff;border-radius:9px;
+  font-size:16.5px;font-weight:800;color:var(--ink);background:rgba(143,211,255,.08);white-space:nowrap}
+.segs button[aria-pressed="true"]{background:#5fd0ff;border-color:#bfe9ff;color:#00264d;font-weight:900}
+.ck{display:flex;align-items:center;gap:11px;padding:12px 14px;width:100%;text-align:left}
+/* 사고원인·부상종류 목록은 간격을 좁게 */
+.ck[data-multi]{padding:7px 14px}
+.ck[data-multi] .txt small{display:inline;margin-left:6px}
+.ck .mark{width:24px;height:24px;flex:none;border:2.5px solid #8fd3ff;background:rgba(143,211,255,.12);border-radius:6px;
+  display:grid;place-items:center;font-size:14px;font-weight:900;color:transparent}
+.ck[aria-pressed="true"] .mark{background:#5fd0ff;border-color:#bfe9ff;color:#00264d}
+.ck .txt{font-size:17px;font-weight:700;line-height:1.4}
+.ck .txt small{display:block;font-size:15px;color:var(--hint);font-weight:600}
+
+/* ── 단추 ── */
+.btn{display:flex;align-items:center;justify-content:center;gap:7px;
+  border-radius:11px;padding:15px 16px;font-size:18px;font-weight:900;
+  background:var(--blue);color:#fff;width:100%;line-height:1.3}
+.btn.ghost{background:var(--field);color:var(--sub);border:2px solid var(--line)}
+.btn.red{background:var(--emergency)}
+.btn.ok{background:#1b7f45}
+.btn small{font-size:15px;font-weight:600;opacity:.92}
+.row{display:flex;gap:9px}
+.row>*{flex:1}
+
+/* ── 알림 ── */
+.elapsed{font-size:15px;font-weight:800;color:#ffe68c;padding:2px 8px 8px}
+/* 미보상·경고 : 노랑 바탕 + 검은 글씨 (빨간 버튼들과 구분) */
+.flag{background:#ffd60a;border:3px solid #1a1a1a;border-radius:10px;
+  padding:12px 14px;margin:10px 0;font-size:17px;font-weight:800;color:#1a1a1a;line-height:1.5}
+.flag b{color:#c1121f;font-weight:900}
+.flag.ok{background:#0e3a22;border-color:var(--ok);color:#9ff0bd}
+
+/* ── 목록 ── */
+.list{display:flex;flex-direction:column;gap:10px}
+.item{background:var(--card);border-radius:12px;padding:14px 15px;text-align:left;width:100%;
+  border-left:5px solid var(--line)}
+.item.nc{border-left-color:#ffd60a}
+.item .t1{font-size:17px;font-weight:800;line-height:1.45;margin-bottom:5px}
+.item .t2{display:block;font-size:15px;color:var(--hint);margin-top:4px}
+.item .tag{display:inline-block;background:#ffd60a;color:#1a1a1a;font-weight:900;border-radius:5px;
+  padding:2px 7px;font-size:15px;font-weight:800;margin-top:7px}
+.empty{text-align:center;padding:48px 20px;color:var(--muted);font-size:16.5px;line-height:1.7}
+
+/* ── 결과 ── */
+.out{background:var(--cardDark);border-radius:10px;padding:14px;font-size:16.5px;
+  line-height:1.7;white-space:pre-wrap;word-break:keep-all;overflow-wrap:break-word;border:1px solid var(--line)}
+.outlab{font-size:15px;font-weight:800;color:var(--sky);margin:16px 0 7px}
+.cpy{display:flex;align-items:center;gap:10px;background:var(--field);border:2px solid var(--line);
+  border-radius:10px;padding:13px 15px;width:100%;text-align:left;margin-bottom:9px}
+.cpy .no{width:26px;height:26px;flex:none;border-radius:7px;background:var(--blue);
+  display:grid;place-items:center;font-size:15px;font-weight:900}
+.cpy .nm{flex:1;font-size:17px;font-weight:800}
+.cpy .go{font-size:15px;color:var(--hint);font-weight:700}
+
+/* ── 덮개 ── */
+.sheet{position:fixed;inset:0;background:rgba(0,8,20,.72);display:none;
+  align-items:flex-end;justify-content:center;z-index:50}
+.sheet.on{display:flex}
+.sheet > .in{background:var(--header);border-radius:18px 18px 0 0;width:100%;max-width:720px;
+  max-height:88vh;overflow:auto;padding:20px 18px calc(20px + env(safe-area-inset-bottom,0px))}
+/* 팝업 안 입력칸 : 테두리로 칸을 분명히 구분 */
+.sheet .f{background:var(--bg);border:2px solid var(--line);margin-bottom:12px}
+.sheet .f:focus-within{border-color:var(--sky)}
+.sheet .f .in{padding:11px 14px}
+#lineChips button[aria-pressed="true"]{color:#fff}
+.sheet h3{margin:0 0 14px;font-size:20px;font-weight:900}
+.sheet .p{margin:0 0 14px;font-size:16.5px;color:var(--hint);line-height:1.6}
+
+/* ── 알림막대 ── */
+/* 폰 자체 「클립보드에 복사됨」 알림(화면 아래)과 겹치지 않게 화면 가운데에 크게 */
+.toast{position:fixed;left:50%;top:42%;
+  transform:translate(-50%,-50%) scale(.96);background:#06244a;border:3px solid var(--sky);
+  color:#fff;padding:18px 26px;border-radius:16px;font-size:19px;font-weight:900;line-height:1.5;
+  white-space:pre-line;box-shadow:0 10px 40px rgba(0,0,0,.6);
+  opacity:0;pointer-events:none;transition:.2s;z-index:90;width:max-content;max-width:88vw;text-align:center}
+.toast.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+
+.foot{text-align:center;color:var(--muted);font-size:15px;line-height:1.8;padding:30px 10px 10px}
+.foot a{color:var(--hint)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="sheet" id="sheet"><div class="in" id="sheetIn"></div></div>
+<div class="toast" id="toast"></div>
+<script>
+/* ══════════════════════════════════════════════
+   상황보고 도우미
+   현장 입력 → 상황보고 제목·사고개요·발생경위 자동 작성
+   ══════════════════════════════════════════════ */
+
+const $ = s => document.querySelector(s);
+const app = $("#app");
+const esc = s => String(s == null ? "" : s)
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+
+/* ── 저장 ── */
+const KEY = "report.v1";
+let S = {reports:[], station:"", line:"", staffName:"", staffPos:"",
+         recentPlace:[], recentRescue:[], recentPolice:[]};
+function load(){ try{ const v = JSON.parse(localStorage.getItem(KEY)||"null"); if (v) S = Object.assign(S, v); }catch(e){} }
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+
+/* ══ 선택지 ══ */
+const LINES = ["(선택)","1호선","2호선","3호선","4호선","5호선","6호선","7호선","8호선","9호선"];
+
+const ACCIDENT_TYPES = ["(선택)","응급환자 발생","에스컬레이터 넘어짐","대합실 넘어짐",
+  "승강장 넘어짐","계단 넘어짐","열차 내 넘어짐","열차 출입문 끼임",
+  "엘리베이터 출입문 끼임","승강장 PSD 불량","기타"];
+
+const WEATHER_SLIP = "눈/비에 의한 미끄러짐";
+const TRAIN_STOP = "급정거";
+
+const CAUSES = ["발 헛디딤","음주","불안정한 동작(소지품, 휴대폰 조작, 캐리어 등)",
+  WEATHER_SLIP,"토사물 등에 의한 넘어짐","안전수칙 미준수","제3자 원인",
+  "지병(어지럼증 등)","무리한 승차",TRAIN_STOP,"기타"];
+
+/** 구내치료비 미보상 판정 대상 사고원인 */
+const NO_COMP = ["발 헛디딤","음주","불안정한 동작(소지품, 휴대폰 조작, 캐리어 등)",
+  WEATHER_SLIP,"안전수칙 미준수","제3자 원인","지병(어지럼증 등)","무리한 승차"];
+
+const INJURIES = [
+  ["찰과상","스치거나 긁힘"],["타박상","부딪혀 멍듦"],["열상","피부 찢어짐"],
+  ["화상","데임"],["골절","뼈 부러짐"],["탈골","관절 빠짐"],
+  ["두부손상","머리 부위 부상"],["의식불명","의식 없음"],["심정지","심장 정지"],["외상없음",""]
+];
+
+const AGES = ["(선택)","10대 미만","10대","20대","30대","40대","50대","60대","70대","80대+","미상"];
+const GENDERS = ["(선택)","남성","여성","미상"];
+const ALCOHOL = ["(선택)","음주","안함","확인안됨"];
+const SEVERITY = ["(선택)","중상","경상","이상없음","미기재"];
+const CCTV = ["(선택)","확인 및 저장 완료","확인 완료(저장 미실시)","확인 불가(사각지대 등)","미확인"];
+const STAFF_COUNT = ["(선택)","1명(단독)","2명","3명"];
+
+/** 환자가 없는 시설 고장 — 보상판단·환자정보·부상 항목이 무의미 */
+const NO_PATIENT_TYPES = ["승강장 PSD 불량"];
+
+const LINE_COLORS = ["#00539f","#00a651","#ef7c00","#00a0d4","#9966cc","#cd6221","#747f00","#e61e78"];
+
+/* ══ 작은 도구 ══ */
+const pad = n => String(n).padStart(2,"0");
+const DAYS = ["일","월","화","수","목","금","토"];
+function nowText(){ const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function todayText(){ const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function parseDt(s){ if (!s) return null;
+  const m = String(s).trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if (!m) return null;
+  return new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5]); }
+function dtKey(s){ const d = parseDt(s); return d ? d.getTime() : Number.MAX_SAFE_INTEGER; }
+function timeOnly(s){ const p = String(s||"").trim().split(" "); return p.length >= 2 ? p[1] : String(s||"").trim(); }
+/** "2026-08-04 14:32" → "2026-08-04(화요일) 14:32" */
+function dateWithDay(s){ const d = parseDt(s); if (!d) return s || "미기재";
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}(${DAYS[d.getDay()]}요일) ${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+/** 사고개요용 : 2026. 08. 04.(화) 22:01경 */
+function dateDot(s){ const d = parseDt(s); if (!d) return s ? s + "경 " : "";
+  return `${d.getFullYear()}. ${pad(d.getMonth()+1)}. ${pad(d.getDate())}.(${DAYS[d.getDay()]}) ${pad(d.getHours())}:${pad(d.getMinutes())}경 `; }
+
+/** 보고서용 소요시간 : 「   (119 신고 후 12분)」 */
+function elapsedSuffix(from, to, prefix){
+  const a = parseDt(from), b = parseDt(to);
+  if (!a || !b) return "";
+  const m = Math.round((b - a) / 60000);
+  if (m < 0) return `   (※ ${prefix} 시각 확인 필요)`;
+  const t = m < 60 ? `${m}분` : (m % 60 === 0 ? `${m/60}시간` : `${Math.floor(m/60)}시간 ${m%60}분`);
+  return `   (${prefix} ${t})`;
+}
+/** 걸린 시간 */
+function elapsedText(from, to, label){
+  const a = parseDt(from), b = parseDt(to);
+  if (!a || !b) return "";
+  const m = Math.round((b - a) / 60000);
+  if (m < 0) return "";
+  const h = Math.floor(m/60), mm = m%60;
+  const t = h ? `${h}시간 ${mm}분` : `${mm}분`;
+  return `▸ ${label} ${t}`;
+}
+
+/* ── 받침 처리 ── */
+/** 마지막 한글 음절의 받침 번호 (한글이 없으면 -1) — 「지병(어지럼증 등)」은 「등」으로 판단 */
+function lastJong(w){
+  for (let i = String(w).length - 1; i >= 0; i--){
+    const c = w.charCodeAt(i);
+    if (c >= 0xAC00 && c <= 0xD7A3) return (c - 0xAC00) % 28;
+  }
+  return -1;
+}
+const withRo  = w => { if (!w) return w; const j = lastJong(w); return w + ((j <= 0 || j === 8) ? "로" : "으로"); };
+const withIGa = w => { if (!w) return w; const j = lastJong(w); return w + (j <= 0 ? "가" : "이"); };
+const withEul = w => { if (!w) return w; const j = lastJong(w); return w + (j <= 0 ? "를" : "을"); };
+
+/* ══ 보상여부 판정 ══ */
+const baseType = t => { const i = String(t).indexOf("("); return i > 0 ? t.slice(0,i).trim() : String(t).trim(); };
+const isNoPatient = t => NO_PATIENT_TYPES.includes(baseType(stripEtc(String(t||""))));
+
+/** "기타(내용)" → "내용" */
+function stripEtc(raw){
+  if (String(raw).startsWith("기타(") && String(raw).endsWith(")")){
+    const inner = raw.slice(3, -1).trim();
+    if (inner) return inner;
+  }
+  return raw;
+}
+
+/**
+ * 사고유형별 면책 예외
+ *  · 대합실·승강장 넘어짐 + 눈/비 미끄러짐  → 공사 관리구역이므로 예외
+ *  · 열차 내 넘어짐 + 급정거               → 운전 원인이므로 예외
+ */
+function effectiveCauses(accidentType, causes){
+  let r = causes.slice();
+  if (accidentType === "대합실 넘어짐" || accidentType === "승강장 넘어짐")
+    r = r.filter(c => c !== WEATHER_SLIP);
+  if (accidentType === "열차 내 넘어짐")
+    r = r.filter(c => c !== TRAIN_STOP);
+  return r;
+}
+function isNoComp(accidentType, causes, alcohol){
+  if (isNoPatient(accidentType)) return false;      // 시설 고장은 판단 대상 아님
+  if (alcohol === "음주") return true;               // 음주는 유형과 무관하게 미보상
+  return effectiveCauses(accidentType, causes||[]).some(c => NO_COMP.includes(c));
+}
+function noCompReason(r){
+  if (isNoPatient(r.accidentType)) return "";
+  if (r.alcohol === "음주") return "음주";
+  return effectiveCauses(r.accidentType, r.causes||[]).filter(c => NO_COMP.includes(c)).join(", ");
+}
+
+/* ══ 문장 만들기 ══ */
+/** 「천호」라고 넣어도 문장에는 「천호역」으로 */
+function withStation(n){
+  const v = String(n||"").trim();
+  if (!v) return "";
+  return /역$/.test(v) ? v : v + "역";
+}
+const stationName = () => withStation(S.station);
+const myStaffLabel = () => [S.staffName, S.staffPos].filter(Boolean).join(" ");
+
+/** 세부위치와 겹치는 장소는 덜어낸다 */
+function accidentTypeShort(t, locationDetail){
+  const t0 = stripEtc(String(t||"").trim());
+  if (!t0 || t0 === "(선택)") return t0 === "(선택)" ? "" : t0;
+  const loc = String(locationDetail||"").toLowerCase();
+  if (!loc) return t0;
+  // 「열차 내」를 「열차」보다 먼저 검사
+  const places = [
+    ["에스컬레이터", ["에스컬레이터","e/s","es"]],
+    ["엘리베이터", ["엘리베이터","e/v","ev","엘베"]],
+    ["승강장", ["승강장"]], ["대합실", ["대합실"]], ["계단", ["계단"]],
+    ["열차 내", ["열차","객실","전동차"]], ["열차", ["열차","객실","전동차"]]
+  ];
+  let s = t0;
+  for (const [place, aliases] of places){
+    if (s.startsWith(place) && aliases.some(a => loc.includes(a))){
+      const rest = s.slice(place.length).trim();
+      if (rest){ s = rest; break; }
+    }
+  }
+  // 「PSD」가 세부위치에도 있으면 한 번 더 덜되, 남는 말이 두 글자 이상일 때만
+  if (s.startsWith("PSD") && loc.includes("psd")){
+    const rest = s.slice(3).trim();
+    if (rest.length >= 2) s = rest;
+  }
+  return s;
+}
+
+/** 목록·제목용 한 줄 요약 */
+function summaryTitle(r){
+  const line = (r.line && r.line !== "(선택)") ? r.line : "";
+  const station = withStation(r.station) || stationName();
+  const lineStation = [line, station].filter(Boolean).join(" ");
+  const place = (r.locationDetail||"").trim();
+
+  let accident = "";
+  if (r.accidentType && r.accidentType !== "(선택)"){
+    const short = accidentTypeShort(r.accidentType, r.locationDetail);
+    accident = isNoPatient(r.accidentType) ? `${short} 발생` : short;
+  }
+
+  const age = (r.ageRange && r.ageRange !== "(선택)") ? r.ageRange : "";
+  const gender = (r.gender && r.gender !== "(선택)") ? r.gender : "";
+
+  // 제목에서는 원인의 괄호 설명을 떼어낸다
+  const causeList = (r.causes||[]).filter(Boolean).map(c => baseType(stripEtc(c)));
+
+  // 사고 자체를 서술하는 원인은 사고유형 자리로 올린다
+  const narrative = ["토사물 등에 의한 넘어짐", WEATHER_SLIP];
+  let accidentText = accident, rest = causeList;
+  if (accident.includes("넘어짐")){
+    const hit = causeList.find(c => narrative.includes(c));
+    if (hit){ accidentText = hit; rest = causeList.filter(c => c !== hit); }
+  }
+  // 사고유형 없이 원인만 있는 환자 없는 신고 → 원인을 제목 본문으로
+  if (!accident && !hasPatient(r) && causeList.length){ accidentText = eventText(r); rest = []; }
+  const cause = rest.join(", ");
+
+  const transport = r.transported ? "응급실 이송" : (r.selfReturn ? "자진 귀가" : "");
+
+  const head = [lineStation, place, accidentText].filter(Boolean).join(" / ");
+  const detail = isNoPatient(r.accidentType) ? ""
+    : [age, gender, cause, transport].filter(Boolean).join(" / ");
+
+  return [head, detail ? `(${detail})` : ""].filter(Boolean).join(" ") || "내용 미기재";
+}
+
+/** 사고개요용 사고유형 문구 */
+function accidentPhrase(r){
+  const t = String(r.accidentType||"").trim();
+  if (t === "응급환자 발생") return "응급증상이 발생";
+  const short = accidentTypeShort(t, r.locationDetail);
+  if (!short || short === "(선택)" || short === "기타") return "사고가 발생";
+  // 「기타(열차 내 냄새)」처럼 직접 적은 유형은 사고가 아닐 수 있어 「사고」를 붙이지 않는다
+  if (t.startsWith("기타(")) return `${withIGa(short)} 발생`;
+  return `${short} 사고가 발생`;
+}
+
+/** 사고유형을 안 골랐을 때, 환자 없는 신고면 사고원인을 내용으로 쓴다 (예: 열차 타는 냄새) */
+function eventText(r){
+  const t = String(r.accidentType||"").trim();
+  if (t && t !== "(선택)" && t !== "기타"){
+    const short = accidentTypeShort(t, r.locationDetail);
+    if (short && short !== "기타") return short;
+  }
+  if (!hasPatient(r)) return causePhrase(r);
+  return "";
+}
+
+/** 환자 정보가 하나라도 입력됐는지 (성명·출생연도·연령대·성별·연락처) */
+function hasPatient(r){
+  if (isNoPatient(r.accidentType)) return false;
+  const set = v => v && v !== "(선택)";
+  return !!(String(r.patientName||"").trim() || String(r.birthYear||"").trim() || set(r.ageRange) ||
+            set(r.gender) || String(r.phone||"").replace(/\D/g,"").length >= 4);
+}
+
+/** 사고개요용 사고원인 문구 */
+function causePhrase(r){
+  const accident = String(r.accidentType||"");
+  return (r.causes||[]).filter(Boolean).map(raw => {
+    if (raw === "기타") return null;
+    let c = (String(raw).startsWith("기타(") && String(raw).endsWith(")")) ? raw.slice(3,-1).trim() : raw;
+    if (c === "제3자 원인") c = "제3자와의 접촉";     // 보상판단 용어 → 서술형
+    if (accident.includes("넘어짐") && c.includes("넘어짐"))
+      c = c.replace("에 의한 넘어짐","").trim();
+    return c || null;
+  }).filter(Boolean).join(", ");
+}
+
+/** 나이 표기 */
+function birthBase(r){
+  const y = parseInt(String(r.birthYear||"").trim(), 10);
+  if (!(y >= 1900 && y <= 2200)) return null;
+  const d = parseDt(r.incidentDatetime);
+  return { y, old: (d ? d.getFullYear() : new Date().getFullYear()) - y };
+}
+/** 사고개요용 : 출생연도가 있으면 「72세」, 없으면 연령대 */
+function ageShort(r){
+  const b = birthBase(r);
+  if (b) return `${b.old}세`;
+  return (r.ageRange && r.ageRange !== "(선택)") ? r.ageRange : "";
+}
+function ageBandOf(old){
+  if (old < 10) return "10대 미만";
+  if (old >= 80) return "80대+";
+  return `${Math.floor(old/10)*10}대`;
+}
+/** 보고서용 : 「72세(1954년생)」, 없으면 연령대 */
+function ageText(r){
+  const b = birthBase(r);
+  if (b) return `${b.old}세(${b.y}년생)`;
+  return (r.ageRange && r.ageRange !== "(선택)") ? r.ageRange : "";
+}
+
+/** 시설 고장용 사고개요 */
+function facilitySummary(r){
+  let s = dateDot(r.incidentDatetime);
+  const place = [withStation(r.station) || stationName() || "○○역", r.locationDetail].filter(Boolean).join(" ");
+  s += place + "에서 ";
+  const cause = causePhrase(r);
+  const what = accidentTypeShort(r.accidentType, r.locationDetail);
+  if (what && what !== "(선택)" && what !== "기타"){
+    if (cause) s += withRo(cause) + " ";
+    s += what + " 발생";
+  } else {
+    s += (cause || "상황") + " 발생";      // 「열차 타는 냄새 발생」
+  }
+  const res = [];
+  if (r.called119) res.push("119 출동");
+  if (r.called112) res.push("112 출동");
+  return s + (res.length ? ", " + res.join(", ") : "") + ".";
+}
+
+/** ■ 사고개요 — 한 문장으로 조립 */
+function buildSummary(r){
+  // 시설 고장이거나 환자 정보가 전혀 없으면 「○○ 발생」 형태
+  if (!hasPatient(r)) return facilitySummary(r);
+
+  const chosen = v => v && v !== "(선택)" && v !== "미기재";
+  let s = dateDot(r.incidentDatetime);
+
+  // 대상 : 50대 여성 승객이
+  const a = ageShort(r);
+  if (chosen(a) && a !== "미상") s += a + " ";
+  if (chosen(r.gender) && r.gender !== "미상") s += r.gender + " ";
+  s += "승객이 ";
+
+  // 장소
+  s += (withStation(r.station) || stationName() || "○○역");
+  if (r.locationDetail) s += " " + r.locationDetail;
+  s += "에서 ";
+
+  // 원인
+  const cause = causePhrase(r);
+  if (cause) s += withRo(cause) + " ";
+
+  // 사고
+  s += accidentPhrase(r);
+
+  // 조치 결과
+  const results = [];
+  if (r.transported || r.erTransportTime){
+    const h = String(r.hospital||"").trim();
+    const place = (!h || h.includes("응급실")) ? "응급실" : h;
+    results.push(r.called119 ? `119 출동하여 ${place} 이송됨` : `${place} 이송됨`);
+  } else if (r.called119){
+    results.push("119 출동하였으나 이송 없음");
+  }
+  if (r.called112) results.push("112 출동");
+  if (r.selfReturn) results.push("자진 귀가함");
+  const resultText = results.join(", ");
+
+  // 부상 + 결과
+  const stateLike = ["심정지","의식불명"];
+  const all = (r.injuries||[]).filter(x => x && x !== "외상없음");
+  const states = all.filter(x => stateLike.includes(x));
+  const wounds = all.filter(x => !stateLike.includes(x));
+  const noInjury = (r.injuries||[]).includes("외상없음") && r.accidentType !== "응급환자 발생";
+
+  if (states.length){
+    s += "하여 ";
+    if (wounds.length) s += withEul(wounds.join(", ")) + " 입고 ";
+    s += states.join(", ") + " 상태로 " + (resultText || "조치함") + ".";
+  } else if (wounds.length && resultText){
+    s += "하여 " + withEul(wounds.join(", ")) + " 입고 " + resultText + ".";
+  } else if (wounds.length){
+    s += "하여 " + withEul(wounds.join(", ")) + " 입음.";
+  } else if (noInjury && resultText){
+    s += "하였으며 외상 없이 " + resultText + ".";
+  } else if (noInjury){
+    s += "하였으나 외상 없음.";
+  } else if (resultText){
+    s += ", " + resultText + ".";
+  } else {
+    s += "함.";
+  }
+  return s;
+}
+
+/** 직원 도착 문구 */
+function staffArrivalLabel(r){
+  const who = r.staffLabel || myStaffLabel() || "직원";
+  const n = parseInt(String(r.staffCount||"").match(/^\d+/) || 0, 10) || 0;
+  const subject = n >= 2 ? `${who} 외 ${n-1}명` : who;
+  return hasPatient(r) ? `${subject} 현장 도착 및 환자 확인`
+                      : `${subject} 현장 도착 및 확인`;
+}
+
+/** ■ 발생경위 및 조치내용 — 시간순 정렬 */
+function buildTimeline(r){
+  const place = [withStation(r.station) || stationName(), r.locationDetail].filter(Boolean).join(" ");
+  const ev = eventText(r);
+  const accidentPart = ev ? `${ev} 발생` : (hasPatient(r) ? "사고 발생" : "상황 발생");
+  const first = place ? `${place} ${accidentPart}` : accidentPart;
+
+  const rows = [
+    [r.incidentDatetime, first],
+    [r.receivedDateTime, "신고 접수"],
+    [r.staffArrivalDateTime, staffArrivalLabel(r)],
+    [r.report119Time, "119 신고"],
+    [r.arrival119, r.rescueTeam119 ? `${r.rescueTeam119} 도착` : "119 도착"],
+    [r.erTransportTime, (() => { const h = String(r.hospital||"").trim();
+      return (!h || h.includes("응급실")) ? "응급실 이송" : `${h} 응급실 이송`; })()],
+    [r.report112Time, "112 신고"],
+    [r.arrival112, r.policeTeam112 ? `${r.policeTeam112} 도착` : "112 도착"],
+    [r.selfReturnTime, "자진 귀가"]
+  ];
+  (r.timeline||[]).forEach(raw => {
+    const i = String(raw).indexOf("|");
+    if (i > 0) rows.push([raw.slice(0,i), raw.slice(i+1)]);
+  });
+
+  const out = rows.filter(([t,v]) => t && v).sort((a,b) => dtKey(a[0]) - dtKey(b[0]))
+    .map(([t,v]) => `- ${timeOnly(t)} : ${v}`).join("\n");
+  return out || "(입력된 시각이 없습니다)";
+}
+
+/** ■ 특이사항 */
+function buildNotes(r){
+  const parts = [];
+  if (r.notes) parts.push(r.notes);
+  if (r.cctv && r.cctv !== "(선택)") parts.push(`CCTV 확인 및 저장 : ${r.cctv}`);
+  if (isNoComp(r.accidentType, r.causes, r.alcohol)){
+    const reason = noCompReason(r);
+    parts.push("※ 구내치료비 미보상 대상(참고용)" + (reason ? ` — 사유: ${reason}` : ""));
+  }
+  return parts.join("\n") || "(입력된 특이사항이 없습니다)";
+}
+
+/** 전체 보고서 */
+function buildFullReport(r){
+  const L = [];
+  const add = (t="") => L.push(t);
+  add("══════════════════════════");
+  add("   서울교통공사 상황보고서");
+  add("   " + summaryTitle(r));
+  add("══════════════════════════");
+  add();
+  add("■ 제목");       add("  " + summaryTitle(r));            add();
+  add("■ 발생일시");   add("  " + dateWithDay(r.incidentDatetime)); add();
+  add("■ 발생위치");   add("  " + [r.line, withStation(r.station) || stationName(), r.locationDetail].filter(x => x && x !== "(선택)").join(" ")); add();
+  add("■ 신고접수 시각"); add("  " + (r.receivedDateTime || "미기재")); add();
+  add("■ 작성 직원");  add("  " + (r.staffLabel || myStaffLabel() || "미기재")); add();
+  add("■ 직원 도착시각");
+  add("  " + (r.staffArrivalDateTime || "미기재") + elapsedSuffix(r.receivedDateTime, r.staffArrivalDateTime, "신고접수 후"));
+  add();
+  add("■ 출동 인원");  add("  " + (r.staffCount || "미기재") + `  (${staffArrivalLabel(r)})`); add();
+  add("────────────────────────");
+
+  const hasResponse = r.called119 || r.report119Time || r.arrival119 || r.erTransportTime ||
+    r.rescueTeam119 || r.transported || r.hospital || r.called112 || r.report112Time ||
+    r.arrival112 || r.policeTeam112 || r.selfReturn || r.selfReturnTime;
+
+  if (isNoPatient(r.accidentType) && !hasResponse){
+    add("■ 119 · 112 대응"); add("  해당 없음 (시설 고장)"); add();
+  } else {
+    add("■ 119 신고시각"); add("  " + (r.report119Time || "미기재")); add();
+    add("■ 119 도착시각"); add("  " + (r.arrival119 || "미기재") + elapsedSuffix(r.report119Time, r.arrival119, "119 신고 후")); add();
+    add("■ 응급실 이송시각"); add("  " + (r.erTransportTime || "미기재") + elapsedSuffix(r.arrival119, r.erTransportTime, "119 도착 후")); add();
+    add("■ 출동구급대"); add("  " + (r.rescueTeam119 || "미기재")); add();
+    add("■ 병원이송"); add("  " + (r.transported ? "이송됨" : "이송없음")); add();
+    add("■ 이송병원"); add("  " + (r.hospital || "미기재")); add();
+    add("■ 112 신고"); add("  " + (r.called112 ? "신고함" : "미신고")); add();
+    add("■ 112 신고시각"); add("  " + (r.report112Time || "미기재")); add();
+    add("■ 112 도착시각"); add("  " + (r.arrival112 || "미기재") + elapsedSuffix(r.report112Time, r.arrival112, "112 신고 후")); add();
+    add("■ 출동 지구대"); add("  " + (r.policeTeam112 || "미기재")); add();
+    add("■ 자진 귀가"); add("  " + (r.selfReturn ? "자진 귀가함" : "해당 없음") +
+      (r.selfReturnTime ? `  (${r.selfReturnTime})` : "")); add();
+  }
+  add("────────────────────────");
+  if (isNoPatient(r.accidentType)){
+    add("■ 환자 정보"); add("  해당 없음 (시설 고장)");
+  } else {
+    add("■ 환자 정보");
+    add("  성명: " + (r.personalDataPurged ? "개인정보 자동삭제(12시간 경과)" : (r.patientName || "미상")));
+    add("  연령/성별: " + ageText(r) + " " + (r.gender || ""));
+    add("  연락처: " + (r.personalDataPurged ? "개인정보 자동삭제(12시간 경과)" : (r.phone || "미상")));
+    if (r.guardianPhone) add("  보호자 연락처: " + (r.personalDataPurged ? "개인정보 자동삭제(12시간 경과)" : r.guardianPhone));
+    if (r.address) add("  주소·보호자/목격자: " + r.address);
+    add("  음주유무: " + (r.alcohol && r.alcohol !== "(선택)" ? r.alcohol : "미기재"));
+    add();
+    add("────────────────────────");
+    add("■ 사고 현황");
+    add("  유형: " + (r.accidentType || "미기재"));
+    add("  원인: " + ((r.causes||[]).join(", ") || "미기재"));
+    add("  열차번호: " + (r.trainNumber || "미기재"));
+    add();
+    add("■ 부상 현황");
+    add("  종류: " + ((r.injuries||[]).join(", ") || "미기재"));
+    add("  정도: " + (r.severity && r.severity !== "(선택)" ? r.severity : "미기재"));
+  }
+  add();
+  add("────────────────────────");
+  add("■ 발생경위 및 조치내용");
+  buildTimeline(r).split("\n").forEach(x => add("  " + x));
+  add();
+  add("■ CCTV 확인 및 저장");
+  add("  " + (r.cctv && r.cctv !== "(선택)" ? r.cctv : "미기재"));
+  if (r.notes){ add(); add("────────────────────────"); add("■ 메모"); add("  " + r.notes); }
+  add();
+  add("────────────────────────");
+  if (isNoComp(r.accidentType, r.causes, r.alcohol)){
+    const reason = noCompReason(r);
+    add("※ 구내치료비 미보상 대상(참고용)" + (reason ? `  — 사유: ${reason}` : ""));
+  }
+  add("작성시각: " + (r.createdAt || ""));
+  return L.join("\n");
+}
+
+/** 화면용 : 빈 줄·구분선 빼고 「■ 항목 : 값」 한 줄로 */
+function compactReport(t){
+  const L = t.split("\n").filter(l => l.trim() && !/^[═─\s]+$/.test(l));
+  const out = [];
+  for (let i = 0; i < L.length; i++){
+    const cur = L[i], nx = L[i+1];
+    if (cur.startsWith("■ ") && nx && /^ {2}\S/.test(nx) && !/^\s*- /.test(nx) && !(L[i+2] && /^ {2}\S/.test(L[i+2]))){
+      out.push(cur + " : " + nx.trim()); i++;
+    } else out.push(cur);
+  }
+  return out.join("\n");
+}
+
+/** 결과 화면 「환자 정보」 */
+function buildPatient(r){
+  const P = "개인정보 자동삭제(12시간 경과)";
+  const L = [];
+  L.push("성명 : " + (r.personalDataPurged ? P : (r.patientName || "미상")));
+  const ag = [ageText(r), (r.gender && r.gender !== "(선택)") ? r.gender : ""].filter(Boolean).join(" ");
+  L.push("연령/성별 : " + (ag || "미기재"));
+  L.push("연락처 : " + (r.personalDataPurged ? P : (r.phone || "미상")));
+  if (r.guardianPhone) L.push("보호자 연락처 : " + r.guardianPhone);
+  if (r.address) L.push("주소·보호자/목격자 : " + r.address);
+  L.push("음주유무 : " + ((r.alcohol && r.alcohol !== "(선택)") ? r.alcohol : "미기재"));
+  return L.join("\n");
+}
+
+/** 1+2+3 한번에 복사 — 특이사항은 성격이 달라 제외 */
+function buildCombined(r){
+  return `[ 제목 ]\n${summaryTitle(r)}\n\n[ 사고개요 ]\n${buildSummary(r)}\n\n[ 발생경위 및 조치내용 ]\n${buildTimeline(r)}`;
+}
+
+/* ══ 개인정보 12시간 자동 삭제 ══ */
+function purgeOld(){
+  const now = Date.now();
+  let changed = false;
+  (S.reports||[]).forEach(r => {
+    if (r.personalDataPurged) return;
+    const t = parseDt(r.createdAt);
+    if (t && now - t.getTime() > 12*3600*1000){
+      r.patientName = ""; r.phone = ""; if (r.guardianPhone) r.guardianPhone = "";
+      r.personalDataPurged = true;
+      changed = true;
+    }
+  });
+  if (changed) save();
+}
+</script>
+<script>
+/* ══════════════════════════════════════════════
+   화면
+   ══════════════════════════════════════════════ */
+let screen = "list";
+let form = null;          // 작성 중인 내용
+let editingId = null;
+
+const TOTTA = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALAAAAC1CAIAAABwGOK6AACBRUlEQVR42r29d7hlRZU+vFZV7X3yPTd3zk3TQJMzShYRQcwBHPOYxjQ6Y3bEGWd0dMzOjIqOYgARESQoIIiKkhGa0DSdc7o5nbR3Va3vj52q9tnn9mV+83z9oA/cPvecs/euWrXWu971vqi1BvsPAlD874hEBJl/gp8jtv8cETv8DsSvnuUFRGS+Lc7+4g7fE+1Psd7Efv/4UiHrShGRgIA6fo1Zvt7h72GHLxC8JxEhmjcM269rLn/Cb2hcdft3jn/CZr+82a4EMX1bgwtAJABsu+MYX2fyEW0vIopXQ6elY/4Kdfqexn8H/0rmL5qrLf73titFwPDXabZnQMb/OmwcmuNja7+Z2Pb3lLqWtm2AHS7HvGrq9BoAVEq1P7y5LjoABNDGw257AaWv1IgrCEhA2cuxbRNj9F6p+GFvo9l+aL3nrGFMa9LBOxAQEENkDLPXAqZiW/uDPcwNPMwfY3vQrJ/evgb/F48VAFBrjeb7EwFjRDR7hOkUmZNtF+2LOQbM8HnHL44/vT28p35CBIgZn9L2i9YqyTw1ALQmxrD9ViqlEYPwZ3yQ8UjaF/f/cgXMuiwyjrbg8lNvnnHTOq6e9E5O5xBmZkBR3OwUuhGJ6P/pUv8f79TcbmKHj0hnDVoT5wyA/vLY/seePnhgqMY5rV7ac94ZS1cu7Q5egAgICEjUnlW0RZ3/3aXN5beSeNmWS2UfUpkZUtauEKlAagUoPOzZSeaHZZwaZK+p/7s7kn0ozH5kpgMbBd882PTBavjjw3u++N2/PvLE3karyRgnrQn0QG/X6y498tPvO7O3mlNac4Zx9IMolCIA2emIuTgOf4S17fXZc1hKpVCdtkH8X5SdMM8hQmRlCTTr6W4eHObLZjmkZ0mAk1tJFN/Hwz7+5KqDh9QpNnQ+KThn3/nZ+o99+V7ORLkogDSBRuSAKKUen2wdv3b+9d+6dOXSbq01Mvzf7P1goTBGxqXNMYqgsQiw7akH1/+8AlLHBTfLgoA51p/R9wnD6P/Fn1nqov/zY0hpEpzdcs+W173vlp6qyxkqbV8YgCPY8Gj95HUL7vjx60sFju3H9iwf2nlvZJWXHfdkezLw/ErQDjBBKrtg2PlEMFeAkUlRe01FEJXqcyiocNYXtOMH6RNqLtc+pxovfBVnODHV+qevP1gqCsZQKjtlIwIiz1f9fYWHn9z7nZ89zhjTOuNiZ8v6Z/35YX/LfFmq6p7tHVK3C9PJMmb9LqO5HMPmW9vvijZmkFqCYcAP34E63QXqfO+o7ZIwa4XhrCdCh3uNQXhAxFvu3rJp21Cp6GidwoIghoqUoq5K4Rd3bKo3fM4YUdaTyNzobbdo9te3P1G0M5L2N89eFnYiGWc5KagL7TyGPa8wDpQNwZDxV0RhGmmdMvZzxNk/gjqGE6J0gLKWRZAkHi4Itf/8Tw/v5gxIx3soWb4s+OYEWlPOwb37JjftGAUErTMQKcpAt9IJYPsjp7jATn1bxORtO+PF2AFjTW1eytx+ZN9RRIYdogdmLuTUYrffywj4lJ3YEqVinbWoKEI/se3soA6wd7w/MCuomEdeKrOLPia4ZUNjM5whtQdA43KCT2s06yNj9dQywLkdXsl2zELZZyuL2sIDpk72OMdM7ZfZD5GsgMoo665hhxMRzTWbXh8IQEB6tnIVEWfZqx0WOkaFK3W+3xm/GCNjRjaAAIAseMZmIHJdBxmPChrrIVLyvAkAhXByLp/9aXX6mgRAQQrf+WTJLrDbg0qnDzKqD+s8zXxzzIjZLP4ieLgoR0bsMld6gtshA8aD+h6RtT96PHzCl16dIXxsJArm6kBMZ1hJXIkSDorvSPs+Qwwi/1ErB5VmmL2wwo9EAKlUdzW/enmvlY3THErN7CBOc2l5xNkDZqUdmIn62weElY+nUE7zjhFB0NwKNgXNMUXvtCEQQc3QgWtoy8dp6ydo8qHou1s9OmorVg+TBFKYVyhNUpFSJJVWmjJxYsQOmUenNUfhjrr0ghWCg9Y6jB1JUk7RN0fO2fR047Tj5i8crCiVoFCHqbTbzgjqnFF2Kj5neS66bT1hZiM362QHIyGN/5PNUvuZiSQcNmlRDdr6Jdj/S6jtoOnNtOMb0NgFGDS/kuQr/I1ZmoypCybSGhhDzpkQ0T+cMcaCVZJ92kdvrGfDThABGUOt6cwTF1xyzpLh0WlHYJxiBO9GQKSJc9TAc/n8R95xZqrGxLntIjTw3I6pVaectPOuMWMPZZ0mmKpWOhR62A5dU+cK+HAhXgNymnqSxh7CfB8SAcuDnIapx6mwLMlcMASvguqD5gAiBZARAEzVvE3bxncfmKrVW65gC+dV1qzonT9QAkCldNBzSr8XonW0BceHAQ/bMQa/9pmLNu0Y3bh5pL+nSAQEGgCQEAEYg6bnTTfw25970WnHL1BKsyQXp8NgCQbY2n6fk+fdoWC2+tSHA39xlneIQU7zJmX1HMThC/dZO4QIQIRBkQuqBX4dkAMRKEWTT+G8V8bPipLjjMyHN8sVCs6e3TJy9S+e+cNDe/cPTdfrTSU9xliuUBzoKZ6ybuDNrzr6JeeshKhLGedfBISAZN+q9q0WF5la64Xzyrdc/dr3f+7uu58cFahypDgQMfR5odnw5xXhq5++4M2vOlbpYDVgdqmU1f+bW00/B/JL59Uwl657eEMIgIXrgIgySqGg/W00FNI7tgPRoe2/VYMe/1vwDoFTAGBAGpxuPPab4PYB6Xa0PQv6DQoNIoJgC3756ke+evUDkzNeuZR3HMZYdGEEvtQz9RZo9brLjv36P72op8sN1kRCaAF8XsC2kko4AohuuOx9N2xu7agur6NgDBbOjLzonNV/869vXdRX8KUKIlYaV071oOeMj/3fovtzQb6DjJ+w41ndqZeRRchIIPco1iRpvQImaMcPcNcPyekCUIAu6BYedRX0nY2kCFgKqspcEBQ+T5KS3vvZe392y7O9FSY4KE1EEPKxMFy+jCECDE9455664pfffmm1y7VoA+nA2HEXISCRBiKtqfGBDzu33CgLpUnt1DRniL3+VPeqxXjrbapSZSz4/JD6EFzOXBly4aIJCXmz7OhZOnmZiyD9BeKWtUXdMHvanbkRiGz28s+Ev01Ml9LJJ0MAnPci4gWSTS19Uj75dRp7GK2Sh1KllJ1Fh3GMM/a+z97541+tn9/nIkOpIMgdkSzYTmtSGhb0F//82O4P/PO9CSgK1lGNs64GAAhWA3Le+MjH6j/82aTbVZOYV96ArvfpOuULw49vqv/rV7jgGO6C+NynOSWU9smLWUiqsY5n6zhQ+zFFRKktHcMpbbAhQCrzybgXLItLaEKOAUKrO0HCyS+RhuJyqByN3hQDQO0BAYyvB+0BsrYutFWGRZBB1Ia+9okf3fjUgv685/lRBxXDLCS6zhjObHqyv9v5xW+fvfl3mxhDrYFs6DB4htihygiTNc5rn/t886c/44sGuZJMayJUiAoBpe/2dXvXXqeeWA+cg9LR5kvu7ex9io5sT7MZYazfjD4FRheFBr0kBoSeD8yVxCrKxvkYtLVeklQPGSEDBGQcGaMO1x7WaKQBAOZdTOSDJlKSgNHMDqpty0BjyO5tRn8Ywx17Jv/1vx7q6y5JRZrCPYEGFGrc17BzoUm7Dn7/F0/F8ADZRVdy+UZkCxYXKIWcN//9K82vfQt7e1D5iIRACBqJmCbQBIyR79X+9d9J62ARxYuS5tKjaqtOiUgprRRpTUoF/67DCtmi+VEabe/Q1ppLkxna8X7jUwykMl40aQwUQTVoyzf0Q1fopz5OrRFABqSyC+norXDgXCguI9kIDkL0p2nsCfNBGiWoCQMmoeKr//PIyOiM67CE42n8brKtje2vNVWK7vqNI89tGwtwhYzk3IJjoxdohUK0vvf9xhe+gj096EsgAEKWZP2IiKAUdlXUvX/0f/Vr4DwO0fbqPFz3OeJwa02MMSG4EIxzxjkKwYXgnDEAkMr4+hR/AyshoDn0KfCwjYwIlkgtLBFDielSQkv15D/C/t9grg8mnqDpTXjiN7G4jLQE5BloECJohaKC815E276PrBu1IiAYuR+WXRmXYJTd1AIi4Izt2j91891bqpWcVBTmX4gxdG2tWrROAiHY6ETz/sf3HbOmjw5HRAjfWUp0nNb1N9Q+dRX0dMXHItlBl6LcGwu51le/7lx8EZRLz7eOCD4xhlX2D8089MT+Z7eODo3M+JJ6uwtHLO8+6Zh5x60dFALDOilsssIs3CyMET802kydLryNrpdOQgEoWBBtGZcG5DT6ABy6B4sLkQj4AM1shUffCSd+E7uOSq2JFOEY57+Edv4MlKcREByYfIZaw5AbiNtGaYJ18JGaGMMb79g0Mtbo78lLqY3c0+LDRR2KGFGJECfQT28ehs69bzLLcanQcbzbf1v74D9CqQSgIdz3yUIz0zAiwkJBbdrU+t738x/9CCnVnhhl7s4IhSNNJDjbumv8Gz964jd/2HZoZEppzRCRMSJAolJRnLJu4TuvOOFVFx8BCFprFpLtOgah6NkTixCnuRarJosiSvCD4pllnDjBh7cOolNE5KSlVk1gZWod0o/9LY08gEwAKfMwjmsN0hoqa6HneFA1BAQmQE7B1NMY4e7xuZsqrhhDX+rb792WcxhpQjAittlRtUgZSElfhjjD3fsnzIyvvQcYvlpJdIT8032N93wQXBcQSBMgEoJGK3ELE5iotYWVrtZ/f1dt3oyMkVaYyhUzn1lYEAFn7Mc3PXPuFdf94PonZmqNnq5cf0+xt7vQ25Xr7XJ6q64Q7MH1+970j7e/9v237j9UY4wppWG2ZnaA27SRHoieFwbSqZdhfhoDAOw5FVgOvHHAoNySxHKgavqJD9LBOyBcE9SW1moEwIWvACZQCOQcSNLkU9EXTbrJaAQrTcQY7twzsXHrSD4vNEWXGVFIA7ZPGC3IjHhJ0So4G5toBLgyYvvxiWbeIB9fP/329yitQDBSGo3sGOzxsoizQwREQtDkZOOr3zBhqIA7aGb7dsYMShPn+NX/efzdn7nHl9TfWxCcKQ1BLimlUgqkBiAoFURvl/ubP2y79B03bt05zjmzaKqYWc1mQAUdWOYWVAX2jFdbUpm0YBAwqCGX4QnfovwgymngLgAgKcAcgKanPk57bwQmjGZbDEgzAsKBsyHfB94YaR/kBBaWxDhlEqDMo4oAAB57+tDkjOcIDu0lD0WZYUiiifMHCqckABnDmZpXb/qp5Y1xGAvSQ87lsxun3/hWqtfBdUAqRPumYNgrDwdPAhyDEAhISahW/dt+Ix98GDkPThnsBCkjIYDWJDj72S0bP/3V+/q7cw5nUpmFFkZURyQApcmXuq/b3bJz5Mq/v210vAlBtMsqIs12DNnFAmYxac0KnMx1YCeVrAOthIFW2Hsann4d9J6M3gigQGBACpATy9Ezn6Xt30Xk5pNFQASGROR049Gfo+rxUFyMR34MFlxORICM0mchktGsf2LjcDzPaOMocQcSk4eGJsECg13q+cqX2j7FjNxTKRRC795Tu/KtenQUCnlSKklDbBCGgoMmnCvBMLULooFUzS98EaREA7DNbLprAs7Zhi0j//CFP1bLjiZSQYe9veEUsoCQCDxf9Xbnn9o0/Nlv/IUhAoUtwdQST5cVBuGDZjk1kCiTjRC9GzM7pOaILCAHrTA/H0/5Pix5HXijhAiMhS8VJdr0Db3x3xEZQtzjDsdWGBAbOJed/nM87ee4+gOADmQyyaIHF3QuNu8cEwK1fcuCRRAHY0xxbQy2QZC9EWXWMAhaI+c0Mjr9N2+Te/awUhF934i6zAhfYVvWwOKMek8pLJf9+x/0bv41MGZlK5RJLYPPfuP+mZmmEMzuEqA5EmtOFCOi56v+3sJ1t2188IkDjKHSSYKCmADn6XUYT0F2nE2yEVMTcI5+zKBjxz1cE4Aurvs3OOqToBqgJQBD0kAATpfe+UP1zKcBJETczPiyiBQAIi+AVmmY0mCmxBllvenvPTDlcCRtIY2YHO2Y0eFLnpTWmjhDzuJuixFMgtVQq8289Z3q6Q2s2kVSJusMgZDCMGDHCopbDxAtDgQgjfmC9/Vv0/Q0IUtx0NHCG/D3D+6+674d3V05JXWHOsDaruZz8Xx19fVPdgjhFrOvY3mZTWkg6oylsowlZHVvWdC7Yivejid9G1kBVAOYG+aPTg/s/oVe/yGQM/GyjcIriypY1plaFp7/ADAyVh8Zq3OOZLWOwzcjA9clI9KasKomnXO563CbeIdEGhDA8+pvf0/rz/dDbxV8HwEJkMJFgTbjBePeKxpNdAr7bkRaY6Hgb3i2dc2PkSEpZT4tirDG4P+/9/MnKUhA8LAkBjT+AaWoVOB/fHjXvoMznLNsbp+R+WGWoMBhuiupj0dEa1CH0uEsYBUAAAJDLXHgPDjtR1BeBf4kcBeAASly+/Xe39DOnyEyAJ2QVzEbPw2/PBmrlQgARida0zVfRB3uuPo34h8luH6CEyABUjj9DeVyLp8TAdSXUCqJELH2/g+37riL9feC56daBnFAoYSKnZwUxillzH8oiZVy8+of6qFh5NyM5+GkKAFjuHHb6H2P7K6UXak7YUWY4JEJITbsnDkCDw1PP/DEvgCngbbSAEzgv3OowMyhIkhT44M3YdQR7jCOYABCDlqyyhp26jUweD60hgEAkCNydLqovidpgLSvX7Bx/KiUQiNLHBuvtTzJOM7OPzK6dXGuHj4ypXWl5DIWp1xEwW7mvPHJf/KuuwEH+tD3jb1E5toHHYmDUFjY2heEUaxFIAJNkMvR3n3e1T+AaBjE7DEGPcHb7902MdWMKBQWmhyfLBSvx6DWCEkAYQFFBI8+vT/patFcB0HthrSdxnZqxyEa7W9KxYb0AwMAQEFagdvNTvpPWPku8MZA1kBOAig2/0Wd4BOyFVwo3ZsJb8nolKd1DFslB6p5jmGqXCWznY5KUbWSV5qUCqBBTVIC561//0rjez+AwX7wffvN0CIamr19QmAYK7hY3N242pMSK2Xvpz/Vu3YBY6lcmDHURPc+tDfnilTCZDwWiwmNkO5kEmnO+fZd4xG/wDzO8TB9LETI6IJHsE5mYyzoL6YYEyZ11zwRozSTgVZAxI78Rzzxm9h7PFaPxHWfh8HziTqmC5lhK/yqFLT+aGLSA+SIZoPbPHhTTWxCo0tLAIhMES5f0sMZOoIxhowBcxzvv6+uf+HL0NsN2p9tHibKJdA8GRDJQNEwhYwQgRBqeKT5re8kKyfiIjCGu/dPP7NpKJ/jWicR3WyQxPMmmK5kKK4rOYOh0VqgS2FMz2J2N709SUQku4Vhzk+kqNSYNLewTZwrLFYz6ECInICQNCy4FBZcmoICMeFOYme2Z9i80EQc0XE4AEillPQBRAJDYFhQJ5EkaPsRhQxjQ4RAE7kOG59oPPrUoa6y0112cj0V9+abvE9fBb3dqFVA+gxqeh2tJ7twI1PPAZMNGx0WZAB9MbBRqfq/+KV625v4MceA1sDj+gIef+bg8Fitr5pXmmIeLbWPhJKZ1FL0f+EFMoSZmtfyZCHvaIq/oaEmYO51rTMmsUx0sgOEZpY3wmpNkSbGAQC0pHCmEZOQYc3BMNAqCgnaQDzJ/hrpdg8RaCLOkPPgk2DPgZlntw7f85ftOZdRdFAEoSN6gmQukridjRGkQ0BS6nLB+cXtz11/26aiqyHvvqQ49KWN11JPGZFQR6ypIAzEFxWmBDqlFcXI0LogexEk82VIBMg5TU153/t+4dvfILBw+ceePhSCjNhRuAwzBw/DxQMEgAyl1GGrj9IgxPNSPTjsKwNZLUFJGEBgHGQNuAvMCdG6AEVARmSNdBFSsBoQgMLVEJHK0MTuQt5siOorEoIFI11Pbxq+4087/vjw/ud2TAwPj3OkUjEfdHOiu2cyW4wEiWKSJBkjh0gArkAA7UvtTc+8e/svemFyyq2QJElMJy1lYEhGGRXR5IMFpq30F6JxCqMwtYXFlMTuSvO3v3He805+zDEkZbzSN2wdcQQDypqWSLIg6xSECPqIeCIR/IiQYmC0P+MMBZJ22n6WXhvZgLcIoxMQktRbvqUP3I1uN/adCn1nQHUdiGoUvDXoIEuIVJbaR58t/l0Y6YOdFaA0QrBmS/36nq3X3vLsw0/sn5puuq7I51il7ABYxJZ4dt3U97Jne5KTN4oT4cpjDBmWbuk9Vzee7FL1PmiUVCunfY6gkUlEiVwiV4AqSt6NYGj0B+IGFibgQvxZSZBhAqanml/7ZvEH3wseMEMcn2ps3TniOiy5KAJCQjBmEqILjP/LrmwQEUiT64oAXCFMj9ZQFp5BKWZQdiGaXELqPVFrAlLIuNr+fXrms1CYj0RAHiCH/HzoORH7zsbekyG/MKGcp1QfO/CnzTNCcEZE19228T9/+uSTGw9xBuWSyxlqpbUdsU0oKFVtxmpfxi4LajNCRELCRAmRz/C8g15F1np1bYGeWSzry2lysZpapCYWqMke1aiQzJMSpAFRAZPAfEIJqKPWSRCGMN1QZBRhG3FbjQhwplG67VfsjNOk5wvHeWrToZe89ZcsrecXFBwU55Nt00rxRYXzE/WmPOXYeXf/5IrDkbkzlJn+FxR+DCe3glsw9Cd0e4EFfYcckKbGENRvpb23otsL3etw4DzoOxNKK0L4L04UMsYXrWAmOHt8w9CnvnLfnx7ZnXdFbzVHmpTWUqdoyUSE0RGWXthhuRcX6El4SDYvJam77lLThNBAdxcvbHMWyDwL9Kdc7ZepVYXGADWXyKklamqxmlzij82XM/N0oxuaJe07oEhrIvSRSWQSmEIel5VIiKgN9AyQCw2q+T8/qJx1Os+7AHBopFFrQneZSaWitCMaIUDsSIWPWGJBYs6QaQ091QIiKq0R2nVt7V5lB7Zt++gDpVg8xs9FXPkiEvAcICMtw/vOHQAXCEjVcfgvNPIXcipQWMmO/EfsPTnJxWxSfkp6jTH27Z88/i/ffqDZ9Pu681qTlCoqruJUnswWXbvUYQpWjJK3cA2QDR4FkUIhRyBOIEChUpF0GRCgj+IgVPew7ofdhUED2yEqkN8DrUGqLZCTC2hqmT+5WNUWy6lBXetVzZJuuaSCjEACSmQ+MEkog/xJK+yp0v33X/3pH48fddKpKyv3PriDlA/AbZTTPhONDW0D9jHJApTS/T2F8PmwuTBooVPvI04bU7c09U4iKC4ABfSdASN/BNENwJA5gCJafRrRAe4iMK0UjD6in/4UO+sGEF2YnHgU7/E4kjHGmi35oX/5/Y9ufKan6nZVXBnGBIuiRqTtxnZUts46AGOk/nElFw8uhoNJYS4YMw+j9cdI50DniDA5flAjG4PCEBbXO/MUcsozxihPfhc1+1RjkGqL5OQKf3IxTC9Uk4P+ZLeqdWm/SzUdBCTwpXB9b+Znv/pEtdbLJHdZpezIIEnGDtz8ELcOa2g0gOFYCkcptWxRV3iXUlyFLFXD7OIlQpVYJ/Ufc0EgIgEHIlzxXnL7YOxBrO+G1kHwp0H5hAjoAnOABCExxqkwD1rD4I2CUw2CRFynGKuBGGP1hv/GD9/+mz9uH+wvSKWVjGEuOxmOC2pKTW8TJtTaCDZGg6Bt8raDb5EqEIyVEA8xUAIAG3xvAiByQOYobIghACnUAHUUU6x7C/ZJh1MREcHVqqiaJaj368ZCObMY64vV9JLWRK9u3Nt3fL9wChJkMDTeoSawS/3wAs3HGyW0yDiuWtYDEJEdE0Iskq2zEx60tuQUGXM7SY5pcp3bdOZF0nVkApdeCUuvBNWC1iGo7aSZLTi9ERq7oXEIWiOgGsBzqCXMezEUFoORDLZtZWy25N985Lbf/mnHvL6i7yuKC6sEw6bovDcrHzAUYtEeEsG2ppB1lsY9hYyhe/MnRNk5FgIBUwRW8QLICQRJAMmSpgdpYONYGeLdTztcAdMITskHAAFY9Fp+e4HYYVuGctpxX5Zi4QAAZErpvMtWLO42Vj7a8ylkgpeBAubhk8dOE10R65qSZaoVAALLQXEpFJfiwDnh77eGobETpp+j2g5we3Hpm4C5gXpQ+5+AbP7RL9576z1bFwyWPV+miEhBUhjCSgQQnPnhLIAVEmZhi6ZCYiKNHZ1HmGAhRNGGoqxRY1OeLXoVmncueG9pVH1I5IJytWI6zBhDyVRgerZpaQMtJIB2LQFMHgUCtXx/3mB5xZIepUkTkYZgnDVJM8xY2yYu3h4n2kELaJsJFjGznQJGTEz+CvmSiMgoP4j5Qeg5zUqIshKbYDX85KZnrr7+6QUDZd9XmEBWCaXDhm6jwh6tcSi0n4qJRpAR9mJUwMilbR3yqMeMMSkuu+gy3jwOUWQWBSGcjAl0BApi2jNRTISjmL2DZLRkEuSG0BxeslKxGGhjKDWuXDrY150HgAjXhWCYJ5RtwgS7DAZYkmun2RScQnX6LCVl1CFXLFuHNkaRbQYei3ihFtctYDzv2DN57huua3lSiACWSaK4XXrbSEYMRKfyY4JMOMbYdtTWrLQol9DGL41aF4ipEfYYsYn0g7MDL5q6TOE7xduVOtRcmAC5OLv/RnQnkADzhdzyBeVVSyrHHDFwwtHz1qzsXThYMr0agqnA4O3jn88CMxwWw47kAIycPtXDoQ7GF+liNxjVZfjWj93xi9s29PUUfKkNn4Q4YwATLqB2ICJyqTA3q5WBxmYQUTPWbBjF2Gi4vcHaMzaRNtm1aNf2ZM+YZUjPG3EsXoDR08aUfGWkDxPr1Kff3KjOCI1yKGhXtTzl+YoIc3m3t1pYvrDr6NV9xx/Vt25N/xEresKi1AweAAxDwUl6/orcaX0ItAg1lkmCPbCdnssLBrcfeuLAJW+7oZgXKsCYUkMR0b1ESi6dkvLLivyZHiwUwGFoNpnaYZYk/4oZrMaYhwV7USputcUiMsgASQJq3Gw03wTBlscxsoZEWyhaRWHJQ6mEJtXmYIwxxhAZEXm+annK87UmKrh8Xn9p9bLudWv7T1k3/4SjB1csrvKQYQRaE2lC1nkMPJLyT6Wi2YIhs3nddIhIWgPn+OZ/uO2Xv3m2t6es4rdNtoS5dZPSIhLSSM88Z5pvtT2ypK9hLoik6ExlX/G4ZALAY5vyaQc/oFS309RMiTp98cM2tpY9VUDpVJJSZ1HUgTUYnpi2L4mCh/R1y1e+r5Cxnq786qXV005Y+IJTFp1y7LzF88thzJAKEYNstIPm4qwR4nn1VI26HxjD7Xsnz37Dz5UnzTrXGkSF2NCMCK00zXxTIkhvtKTXDYZiBJnRK9JQSg4k66iiZB9TsuPJPhlNkZV4ahSsmh9jfpvti2bMm0avMxotmcihxYRo28qG6QYmvfqY5xlTACCwapBSNz3l+YoxMdhXPPXYeZdesPIl5yyb118CwxHoeR8Z2esmwwHLCiFSaUfwb33/kU988+H+bsf3ZTweECRHMbXF6JJaWQskOzdLdidDKp2MwGAcxNjWFkzJfVtHa5TBGRdprRwrEyWM+a9mxwbb3N0ogYPQwDms/pUtfxRWxakvTilUFxMY157AiKebgrLUk7re8LWGxQurl5638h2vO2bdmv5gWTCGHd2ggsAaLwizoZ5gOTQnU0PSRJy99LP3PXTzY+VyTmkdYbKAAcXU8ymkNEY8NWTAGbBAkARtfbqIH5I13xoxXc11ZNxzNB90SJ5ICQOaKrn2oDfZRYEhKhgyXDFprMVU4aQ8ssNBtMLNaXeju0UJR8p48yjVQAOpiGlvJr8BoU1WKoxQhMAwUMPyfD1d87sq7tteve5j7zqttzunlOaMxdldu85hRwOVWciR1OZSwxhuHPfO/sMMPvicc+8T5CJpHVCd0FfAOAx06b4ylIoESE0PGx6rN6HepEYLPR+kQgLgjDgHHuFxlHITJDA3LrXL/YMxy2XIYqZhGWo/I+yEgZKzPMkBw8qSbCEbNPVYqS0TseQ4k2oTkz5MdILFwA62eT8QmeV0DNrY+ZAZUgwsB5FzJqUen2ysXdH/rc9dcO7pi6XSnGGn8N95Qcyi2mYvCEUgGH732ZkPPjA2UCmon92L+4fIQSQNTR+WLtDnnoCD3ZRzibFA8IUImFLM96HRhJkmTszAyBSMTNDYJMzUseUD5xgO6ut4ERiHcDzPEINBZkJBZFW5Fv0vFesJ0pOTAcyiE5jUrHKT/WBr0Zlvl9igoU3wSbfzTYpP1kmXatXYYF2K94vtHE0y7JeEYDM1Dxn+4IuXvOri1fGaaAemBHQQNMSOyiWZImXw0JAvAEFLWtxFu3ahWyRP46pl+NpzgTFqetBsGcywgK4lsNoFfT20AomIpKSGB1N1PjSKW/bSjv2kCR0HE+aDcfGInCFp8qVSigCAceQs4FuHIB5FM5MmQRYM1CKsQdFEJSkA62K/wZQzI6SKI2PQDyBb1hrTkFj0u0kmYozEpwarGFDACg7PyRiaj0HJhJBsEtVD+hcGU+vkS1Uqipav3v2ZuxbOK59xwvxIj7cNNelUdnbuAmWkE1OePuf2kd1TOpcD/dQ2uONRyDnIGLz5EuqpULMV4sYBRdCco43V5wiAITFOgiNHUJL2HGR3/xVHZ8DhoLVZ7DGGWumpup9znb5qrtqVB9D1ul9v+LVGq+UFShuMC+4K5ggmBAvoaCEhPgUj2H1PNPKnqOlC5kIiTGE2xmli4xB2YdmmPxnWL2gfR+2kIbDN6jAOKpHeRvbjovjIjNrInLOWpyul4u3ff8Uxa/oCCZsUwCg6HAk0R+auJuCIz02oXdMyz4DQAcdFjuD5uG4V9Vag0QryyngyJ4YEEiIhZ/HTRt+HlkYgWL5Iv6Efr7sLxyeZ4DFJVnCsN1r5HH/3FSe96iVrjlje01V2AaDRkPWmNzpePzRSOzBU2753csvO8W27J/YfnJycqksFgrNcjuddBxB1CJwRGfWvgYRTbHOTRJioHxIQ9gktIag4Q0ykBE2JMMIYd0uqEQxDA5IVQTCU8w1A2CALpbZDBSHtzIbJaiaraRv3fJTSOZeNjE++/eN3/O7Hr61U3FRiQFqL9uSCOlOv2oJEeLY9OerPeFTMoRQOepKUBERcsZAQw+nRaF0HRSglhkiA7VAoQ0KGDQ+6ivqsY/it95Hg4dQ+x0ZLL17U/aMvXXrKsfPNpVkqOACFpQur5g9bLbnv0PTmHWNPbhxav3HoqedGdu6b4AwrJTeshMLU09yhGASF6ElCMm2XAAFGQhr/KlrwCaXTcDTxwRjCJDBIMQbNI6E3oJHzojE+YDaCKGEDJ+UzpE4sJCApVbXirt946KpvPvCNfzpfU6BPlUwAiI6kTZpLkAir4ifHJeMsMDOA6QYjpGKeBntAKuNtkzk4jFVgYvQwLjSDnRC8qF5ny+djXz9MzQADBK2kn8uJn33t8uPXDvi+QobMokfEM2Hhzc/l+MqlPSuX9rzk3FUAMD7RvPfBnd+59q8Prj9YLReCGdpollKH6Q0BshDag6gVjSFbKZDONNh+hqIVmfMaqVURw1RxBWrgkWiU9+ZtZ+YsJxl1V3slgrZtbjwbaoID0dkmfd3Xk/vhL9e/+uLVZ5+2JDw4opeKJBgYg4ydrPHacwgOQEQbp1TeYRqAlMKxSSCArgpVS4HpXfItTTHWiOBGQDZNOxq+IU1KUz6H/T04MU2cCYSx8ZmPvueFx68d8KUSgll0REwT0gN8N0BJgg/u6c6/+pK1r7z4yP+4+uF/+6/7SgUXQ08hjOkdnGOr5dUantYQ+C5RMtEeDBMIIbgQyHnQ9WVaE5EOwwzGfM/47mmIVzvGRyaZB4oJaocZcbjqkjFbaxbUYgGglbAaaEsMgiVDH9EzkFJ9+6ePn33akqiCpXhyy5agNshVszhZx5AZY7i/pnfNqDwjQAZSwcQ0aYLuCuRcanpJumb0Aihua2FbI5LQRG6BMXKQkQbGpaTuauGNlx9LRDyJrcnbU9uXDRgDGDEXg/lBhvDx95wxMVX75jWP9VZLUikABhgknnJ0rLZ0Uc9Lz1919Or+hfOrOVe0PH9sojE6Xp+Yah4aaRwcnhkarY1NeZMzLSk1Y+gK7jrMcXjg2RTmgWQ9FDDatNGDoRRXLM7/CNO1H2Gq/0FWPAewmjOQ8H1ik/KkcEVUSlfK7h8f2v3s1tGjV/cFs6MRhS6ToTsHdDKu0DdNqaGGLnPQDKHWwpkmIEBfNZDpidcqQVJrdVDZNKjU4Q8YACOvBSQ5c2Y8eMHJS49c1UcUKLeEyqYJsJkFoBEllDAE4ICatFL60+87+44/79+9fzwngEghMg1ME3zyfS9815Unz+8vdoLmlNJTM62Dw/XteyY27xh96rmhzTtGdx+YnphoKg3FgpPPCa20jqFuSKbckdJN+GAKLtp+FP63kVKYChkxjJliYJpbLhmJxZSqgdV+djgOjdVu/8O2o1f3BUO2MYUuq47Mqina/fuCHzw77jd9VUHQHGGyDk0FguFANUCgEo83jElFxjNL+YAZayTM1zVBwwuSes/XZ564iCH6SgseYTVElHGWZTj2xHeEMaYUlUvuxecs+8Y1Y/mqIOmT9nxJ13zllZdfuDp46uY4dowzIiLn2FMt9FQLR63uu/T8VcGLdx+YenbzyH2P7Lnrz9s27xitlPKc83BsK5TEwIQ8hok6DyYgBRqknTiYRFE7mitMeqVkCkFYclWx+EQmYhT/tivYXx7d9bF3nmYWnwJmJWHO3voMrvGpUR8RA8ofjU6S72POgZ4K6YjtgqGMUwTbxwItxrqyLXCSe9TyWb2FXIAmhurYNf2QKYkyhyHXcPGxqKdAcPTqPgAFxBhjo2PND77ttMsvXO35SnAMbDyjRldK6wx1rGUQ3ETBVizuXrG4+9ILVn/y78788a/W/8fVjzRaOp8TSkmDG4qxXjMAgZKgCTUQaQq0l7gAhohIDA0ihZURWJVHppVpFIjSxKBkJCx8RT7v7to7NTnTrJbzsfGHaB8RzNi1bWhmNGtGmuC5Ke0w1EExOTQOvg9dFSgXIBJfMmHVaL6R0oNZGTw1Is5gagbrTRBCayjlxcql3QCQUvoC6NRSNsVPMmyPB3rynCSQkArmz+v94FvPCGQlES3OWAY7BFOpayzrA91duQ+97YwXnrL8yo/cMTbZdBgqFQkZRIwXbHlEBNUyVMtUyAEgtVrUaGHLA6nRV+gpUirE4AQnzpAxi+9jAdsWwYTshRDxkaydEQxKCOFM1Wh0PFgQ4W+ITudCRqGR3OXQ+oYxHKrLXdO+i0DAUBGOThFpqBQhnwOtLKqHOc9KFs5DaPBDzGfLGU3MQMvDvON7an5/acmCLgiFsdDCXUJ9K2KIgVwEaWKhpi2llwyYvgOKMazV/MsuXL1kQVdssIZp+zKbNo524wpjjSjQGqRSJx87/9ufu/D1H7jVcRFZIk0HDLClacUSOnE1LeijvAOcAxMEBL6Pnkeejy2JtSZMzsD4FI5N0USN1VrQ9IL7iY4AQ9XKLG2j7YYpap/d+WOxhiQi1eqNickmLIE4jRCzZZHtqQWaRmcAAFsn5UhDFTlpYNho4dQMIUBPF7kCGxJieA6NucaoGg9zQeusMKoF0sQQx2ZAaURseWrZ4p6eaiH2WwN7lpSzRE8uZpLJwJ817ScT/mutLpUCRNJE5562hIxcfXaPwllGyhDBEUxK9eIXLD3vlHl337+z2lVQgRoBA2j66oXH0zknotbgS9QEWgGooL1Dbg5yOaoiBRI4QKQ0eL6ebuDoJAyN4YFhtn8M6h7kHGBop3WUTDcl1DkK/c9IBT5VqCOBLkRgSvqq6UkziosYGEtHVWMToCGeG/dbg7/aOKmaCsqMJCJNTLPpGgBQX1dKvZGMEZwEsY6XFxp6tMl8ARABH58Ogorvq7Wr+sMBRTKmDyicVvjLY3t//bvNW3fP1Oqt7go/66Qlr7/sqIXzysGmz3yEQ2N1QE6aCg6sO6I/0ROaG2sMY7JkipYcJhhw6YWr7/jLLmQctQKG1GrR2mVw7onYaJkJtil3j0SgAEhSjNgwRj0V6q/CUctJKZicgY272CPPkudHoSKhqoYysr5EFXVuGKDgxDkVXCjkqJCnYp7KeVYpQaXk5wQN9piFn0jGyCltc49tc0ZmDRP823PjEgLxEOHA2DS2POICersCHTYETESqE+32CHWPmUcYK+4avBxEUArGp4GxIM4ftbo3Xsta6yAjZwynZ7x//MK91976rFTkuIKBUlLdes+2b//4r//6D+dc+fKjlSZmUzaD/z84UmdMSEm9Pfmli7ogrQE1y6oIJDN02p0m+k3OGQIcf9T8YqmgSQMSkSJX0JnHgu8DUXDshZgmmr7WsdFtAleBVODL8KmX8vSCdXr5PHbTfdhohblFfER4CgGpt6T7qlguQiEHlYKuFKGUp4JLrkNCEOdBUEQiLiGfc8ynLMC2RDMrzzbTwST5Iwhv8XMTnhPqEyOOTiMR5B3qKoNOcupMb3mTGWn2kpJwjYyaPk7OAGdak+vyI1f0mV8x2Ij1hrzy72/+zR+2LRjsQsZIAwEPIMXpeuut/3jr1HTrPX9zotnZQwgh7137JgWnlq/Xzqv0VgspXoSZsVE8f2EOaVuDhwaITKBBA2Ax73BqaYmIDJotXL0UB3tUyw+ZbqE7DBIY9ailEBq9IpwxgkCIAGotWjxfv/gMfstfgGFg/aIRoNmiRfPVWetgYQ/kXMYj4q8mIEIi1JqCtUUQSAbnUZSFzQWBw3rxpCjDmLBIpjy9s6ZyLLAkkXBwmADAYVhwSKlEQzfNaqbovsXmB1YlEiUCjNWaWGsgZ1LqatldsqAChkBfQPz/8vcf+82f9ixe0KM0KqmVVkppqbTva9fhvT3FT33lD+ufHeLItKZIGpcYR9K098Ck4OhLWrOyn/N4rMhKTqQK0+cgRSUKevXJbLNZiIWQcxQpIuGD4ERnuHwxcRYClNEcRlIFGrgrGuouMVUioWELjrU6rJinF/ZCywtvc8unI5brKy6AlfMZ48yT1GhBvQnNFng++JKUSr4vQ+BMMV7I8YrLIBawJUPJFtvF9TMH8kMdYQCAvTU51CBXMOIcp5tseBIcgZyjIVEcvbXJw07AWWhXsUbDcml8CjwPGfhSzx8sD/YVE5yHSAi+9+D0D298ZqC36EsVKj8aA6FKa9cVTR+/c936uNccD41OTLcOjUw7AhXB2tWDYKuGx9M1QjDGcHyyeWBoenqmFbiQUxuXwkqzor/zpNbAGWcACA7H+b1gCwSQddUJ+cviHictpmgKXmsEIsFo6TzQhIwhEauU4aJTAIE1vTCvYaHaZuANY/QiQ1qrJKy42OUa3HaGoj2dTtojNqMD20ZiNk+qaYXdXPu5HHt6J840ICeASCttDkOlpPjICBTmkJYB5Ub3YGQCtGac+ZKWL+4p5J3A6TsYImUM7vzTjkNDY/09xXD1gxlvEACklKUCf+CJ/VMzra5yLmQDBVKpE43JaSmE4MxfubhqXHooNc05U5p+8qtnbvrNxh17xjxJXZXymlXdV15+1GUXrg7T2xSRy95Ch4ZnWi2/kMtJKSHnUrUUKAcmkyLGuFkC01hwSpKvRrB2wJdiiEg91dCgpOXhcUewakHXWhAEIQjkeJKp8nAiNTqaGUNF1FfgZQfJoK8Kk86TOSLeRu+LG8z47Lj0fQmVEo6O44NPggBAhEYTx6d0tYhSA2PUxieLOsSYUMBMllF4LpEmwNHJ4IKklMsWVYJcknMez/U8u20YGUNkgNoYYAiuJcR5BaeR4Yk9+6eOWTMQlKyB9MbB4VqtoYp5VizwFYurSScMUSnNOduxZ+K9n7n7zw/vdZh2XWScT06Pb9k+ctvvNl95+TFf++yFxaJDpCO6HlkABxAA7tw3qQK7HqlpsAylfODlBCn/MxYfDfastglqJ2K3idSDZkBaggZiqFcsiDRFTMYomsvJfLwIoAAH8iygDMYnhTDn4ecylGOeITuaJDinHfvx7sdwpo6uQ8iQGNu6H45YQk0/6m+ZqSViatSK0JwqjsbqERotHJ4AHlhw0YolVYh7w1GXrF6XDONLiDdC0v9DAEQmlWp5PiSNZAKAnfsmPV/lHKqW+cLBUnRWBoRKPDg08+p3/WrT9tGBvpJWpHTA0QC3LBDxh9c/Nj4xfe1/vopxNHRN03Mku/ZPh31UTdBT1Y6ApgeY7ilgrEFpz3QZlH+Lgo2xZnxQsCiAcgkGukHK1JQ/gqUqZY2XA0hNC4rcGCAkADuHmG09UEzxJAAQnEmpt974aO76e9gNf8DRCXAcCv4y59DT23DzHuwqgdagQqfmQJg1HiOPlzxZBVuIfmghaGQSx2fQcRCRC7Z4fpdFfiQCgHKBaeVDJB2MtmcQAgFopWS5nJs3UAnaWvEVbd89qbXypV4w0NVTzQedF4yAjc9+7b5nNg0N9BRangwmaCnACJSS0l+0oPLr3239n+uf4oxpTQjAIEPWeceeSc5DDin1VSOMHg3R3ER/PyXvRwlrK95SFFVuGCZMtSYgAwKsVqCYjxjq1igi2Go5xpQyEMDSLpFKnhi1VROdjFpT7Y2xiebeR7fxQ0PECITAuA4jTSThtj/Dk1u1K6iQB8chxoEAVOhUY3wFy9cvXN9KkRB8wy6UGpC0VqClw5mJkgSvPOX4xUzkkPFw8geYsSvC6qDZbK1YVJo/UCayhl+37BwTSJ7nLRwsCcGD4KW05gw3bR+79e7N/d15T5Jhxh3r7DKpoKvs/PjGp5otyaI2mFW8Maw3/J37JoVgSpNGwL4qUqJTiSbljAxp6PDuEGaochvK8AQIyKcagAyUhp4yCRahPAGRHM0jLJF7j8UbiQTisnJ6HbPDdjHSR1Dk3XBgeGas1nAL+ZCzTrE/JQHjoAhvf1D84l7+2AZ2cBg9Hx1BBYdyDggOjEEwXESAmkARaBWuFcaoWoaNO+DJzeQw0CEnYKbhxfB5IG5HRC8+e8WS+cV6vWnsMJNKQpxB06c3v/okHhoVhU/L99W2XaNuzlHEloSqXhRf2u/v3zU1oxxXGHUzxYUlImqCfMHduX960/bxgBRjGvgECdLQaP3gcE1wppUG14GeCgSq1x0JzGjSZ8Ooh/EGRzCmlJExUASTM6HRW18lNgaLpg3J1KVOLOvCLJ40oMtgSZGnQoCAts5ju22VJbMQLbvteyYaLV3IMak0mC6t0R4BF2D3Qdi5H12XV4rQ00UDVeqrUk8ZK0Us5sARFDhkhErFoaKz88xOffdfkRGQChSXlWa7903ZAYyU0r3V/Kfec9rbP37bvIFuwVnsnx0EGzfnHDo0+eKzl7/x8nU6AiuD6LJ/aGbfgQnXgbrHly/uszIxgGc3Dwd0/2jmMlGriFJ1DBDSPfsnjj9qgMjI06OdtffgzOR0q1QQ2lfYVcBKkayJeKDUmBkliYg5QJqmwmNEHZIapmrh+urrMeKtjkFPtIQwIo0eAgBUmioOH8xnLQiz620arJheV+E9MdbLtl0TURFHSGbKYsyr5JwwvEzXcHwat+1lyEhwyLtQcqGcx0oJukq8mCfByfP12ATsGaKhaXQ4CAFKBWRFR7D7HtnzD397RhzLiIhzppR+y2uO33Oo/q//9VAuJ4o5JjCctPGlHplsnnP66h/8+0s4h7glpjQ5gu/aNz0+raplAbo12FdIFcSeL4F0LA9IsTCMgTCDVqRkIA6X9o0FAsAtO8c9T1VKrlYelkuQy4H005rlRmcHIaVnEGcD0XhpgmwTcEZTdZypAwLmHKhWQqcnypq9i/T8wPD/8zXNc7E3z1IVhYiZSyZ/rZOWgAkp7Nw3hQhE2lBwQZPqFwBYYQOLMcrxJH1pNqFWh4MUsGBVYOWCwIiIITicSGOobMM0QaVS+POjBx54/MBZJy3wPCUitDXI6T7zvjOPO3LwKz94eMPmA41GCwDz+fy8gdL73rzuY+88rVgQRMR5VOqSBoBHnxnytGBMIOlASRoo2dxLF/VqAgAN1D7jHUYyTZRzcfH8SjAcYA33AQDApu1joZqg1tjdBY4A308ktY32EdnNgUC3kyzqqml7ixj4GE/W0PMAEcolqBRA69QXQGOW0ZClDxMhX8O8Auty4qcXgvQCsxq81BmNQMAAqt65f0rw9CsTCTArvlNEF4z+kiEwjoCR+hbZDMQAn9FGH58I9If+5e6bv/vKxfMrSunADTLYMkrpy1+06qXnLX/quUM79oz7khbN61q3dl5PVw6IgjZYXMBwhlLq3/5hU84FDYg8lNMLtk9Ahjjn1EVfy+cj5wQrUkJILoFGw1t7RP+RK3sDEkZCF41ux5ZdY46I4ktvJYEJDa6t8aTiGf/ILdwoDILtimhwQBjiVI1pACQqFygnwJchGys9NEbWRAkggkZEqWF5RSCi1MSNHFGQPZ9jjaHFA46mBg0QY2xqprV3/5QjWGxlby5mU94smZg0LXHIlJ5PUuCk9EJE4KGgqCalqJBjm7Ydeulbr/v835/70guPCGxXAqhKa/KldAQ/ad3Ck9YtjFenLxVnmHDAEAMdi3v+suPhx3dXK3nSioA1vUQQIXDiPPPkRScdO/DY+j3VSs5XmLh4ASEhIhMcp2Yab3vdifm8kFKFnszRgmEc6w1/594JR7DQVby7jAarKdaxA6uVY8CTkRSvMdWc2PyEN2tkEoMRg+5yaOnEknMGDOiPwhENTOp9Aq1haVmkx8wRBMxmC0xpaano1w6O1IbHaoKjNQHXru1lyp+kX9imYB2GLbTAlWh2WykqlXK7D06/8SO3nHzcooteuPLkdfPXrupdPL/sOMJ0ipVSax1qu2odDWaRRkRH8FrD/9y3HhTCAQIgpaXcvHPSHk4kx2H//OEXvOyt19brfqmcVyrwcyMGxBgywQ+NNl//ihPf8trjldbBdIap6YwIew9OHxqecQNje0dAtRR0MdBGpKMLjFu/SZywcSWwB36AFLHRyWAaEXqrkKKoIqT+LemPGBY3yyvcolRjJ5Jteo7EkMUAUEQccGikPjPjBcdzyjMqGWXClMN3TJ5MZc6mpKJhuIJpKopWVMjnMI9Pbhx65MkDnGNvtbBiSe/aIwaOWd27ZkX3skXV+QOlnq58J3jt8WcPfvorf3p680ilVJBSMk05F+69f/un33sGi0bSGYKU6gWnLr32P1/z4X/5/Z59U8UcE4IhQ6WhUW95Ur72Zcd+998ucQTXaUdkCHqqz2waGZts9nbllVTgCCrkSCnLvSqKqmh5TybTuXHLGyDmJUfjBgyw6cFkHRgH0NBdBq0TvButDp1JYzAGFSnHYEUXhzb+qcjQ3OuoPZ6YQ+4/NNPyVbnkKEUQC6NEF5jhpWFNmCSsWhM4s9qfCRQUj+tj5CmsiwWnXHQ1UdNTT2469OgzB7XWDodijvX15Jcs7FmxuHvpwq4li7oH+4qOYBPTzV37ph54/MAfH9zaanqVSkFKH5FpxHKp8Mj6vdffvvHKy4/2fMU5Qwjrl0vOP+LEdQu/8+NH7vrDc4dGZpTm1Z7K2tX9b3j5Ua++ZC2R1lozxsCW6A6SiHsf3AnBYUEaOABnlrBqHCQw1TUkM11Bo4Sm2MaZCASHyRrO1IAhMEHlAigdH8tIpvaQedYkJ7ciKrtssXVkRAQZ64AwDT8ozSw1f2/PgWmtU7qiEbvdmIK2huZjDWOypkYwCZKx/gHa0iuGrxICEGodmE0DZ1DM8VKegHgg4XlwuL7nQO2+R/cENhaCC0RSvqe0coVTKrpOWSip4nazJiqWcp/88p8WDFTOP3NJcOIEnymVnj9Q+ud/PP+T73/hoZGZlk993YW+nkJwrAABw7irQAHjJjjHJ6Za9z68r1TKax34GBIoRZGqQKwjZk6LZDz7dDkb618RMcYmZrDpkwPgCCjkAwxUG/ahmdbdAYuEMWhJGCzy/nzIhDCDgkgGwuzVQMa4TptkBoyMN9GWwMKUCpfpuYqYbrcZdkyJ/lKCeFDEyzV+bryvNder48E5RMZyeZ6HROcwIPKxYiEQownKk4BjE/wmIrpCNFr+6z/wq79748nveMMJAQ0nGtJSviTHEcsW90SsXUUEIuLFG5xvDYBSatfl19y0Yefeqb6qkFIRAjQbMFWjnipojckkbop2hDEb08J7MMXpDTJbBmOTRAoUQKUIBTck15qaMfZailtowd30NC2uiIrLInglOWZE4m5lSRcY4vL2GRl889HxuqmBgqmnFhdLZI6zExqHmuEAZvLGYuQZY9JIJG8b4/3ULimLwCJ5XwYAWmkilagUGw7iGI9KRamd0iQEagVfuvqBn9626ayTl555wrxj1/SsWto9r7+Uz1lxNUA+kkEMTGYrhUDX5X9+dO+XvnN/pYhSqsDLFCXRvlFYvRRbHsQdGUrBTvbUCMSs5LhEAjKqDRyeQATSGruKmHMSj1qwpoKjvUdoo0s+wfIuhgCSgNvbTHR0bbMV1QEsg8CZepMFcQpt67LM0bGQF4hpSzXMEPLEtJCoIcFhSXwlgpVmc3NquskYCs4EA86RcRF1AIJlxQioTcRZawWIrK+nOD1dv+nOZ2/4zdN5rvt7C8uW9B+1et6a5V2rllWXL+qaP1DpqeY5z/arHZ1o/ujGp/7je/dLqXM5R1NghY2QL7Bnd8NJa8jh4CvgLNK4Sw+5xlqGRg+CYiA7TC05UNNjB8dAcPQV5HPEMPYAS5tjQuJPB6QTcU1kK6tu5lWIjLnv1OIIvyGZ7Qw/5ESZ85pk4eaE2FF2JlIujca/Me2NmRqgIHvlozUoEHWTlJaCwyXnra415Z59Y2MTjem69lp1TZojcxzhOFxwxhjygFgGGO708HOZ0sAZVUsMgGmCyRn516cPPPTEftIkBBQLud7u4ry+wvyB4oLByoJ5lYGeQrnkKA0Hh6Y3bB55cP3B7bvGykXmOk4IhgWrVjAaG4c77ofLzsKcC56EYF7G4EtRW4w2ykaypAgdB3cdgNExcB2UCEphZOqZHERoTTKFQZ4IAlYpR8FgeUVkdraF1eq0TUpS3BlKJqVQMIahFmKbWBYRpET/dExnNGmTSTJLlqhDihaCCUxDZoVCiecOoOA4OSP//q2nfOGj52sNtYY3PFrftX9qx56x3Xsn9hyY2Xdo+uBwbWyyOVPzPakDKh7nKBgKhwvOWSDLRhARANFxhOvEVRNXWg+PTu0/NCEVaYhVLAGZIK0QqFhw+7rzfmA9bjaflYQcZ5v3wo330Tkn0sJ+cAQSgVQUkEUoIreZrtxkDSlilAMA5/j45rCE4QKnmySVZeeQ3FYCgpCjxRlwRgwBQQO6yltSwNkixFz+JAqzANVyITBJINJtlNHkbCfDOgIM1dF0dmlrtNkfSNaApu2xg6YcDcG8garWJJWulNxKyV25tPv8M5bG339yujUyXj80XNu9f2rnvsld+yb2HJweGqmNTjQmp7xmvaUUIDIGJAQU8m7wmCL8XCOCK7jrCGSG7ldwQjMBhIrIV8rSmsRQYY40UCGP+8fYDX+kBT20ZJ4erEJPGSslyLuILOyjEKHWoCMbl0h8KEhVgpqKPboJtu6DvBtECxqewO379bplOF0PuBqEDFg8loxABL6CRgtrLTbTxPFJdWCkWzaWvPzVMZcRktTfVpDJQB7a5KSCrG/hgmpAz7HV08xK1RZkBmBACKAQGZCKGhQBihVKeFEyAhmNDRq6PpQMtZpYV/S5jLS/f2iSMeQUqnaQUeUwhtVKrlrJrVrac9bJyVU1W3Jiqrn/0PSeA1P7Ds3sPlDbe2Byx67R57aPum4ucgiPSPdBm0HqeIo23MlKtQfXpJuNLJwYF4yAYM8h2LGPcR5M0UC1jP09rL+buoq6lKe8Cy4nLpAlOF4o1Ndo4aMb6YFnQDDQgKCBMUKE3z+KjPSy+eAIJA2ej/UWTjdwalpP1NhkDaZaWGtAowW+zwBajdb8I/oHqnmrBkg4lSnQtV1oLJ4qjplbgEcs7ybQUXZBsYcnGsIpZHwWA5pR6BHLg2oBljnEbVe0ZN3AlIwy00UyBwVSQnwERJohGx5rQGSBmuDf0TqPtV0iuQVgDPM5MX+gPH+gfNK6BUkTxFfv/vRvfnH7c91dRUXWV4m/HhnWxYkck+HzHaO7FNPLNQECOAJcETDHYXQKhydhy/5Ad4LnHCrmdF5gMQelPJRLmHcBEFsejU7g3hGcrJHLIdpDqBQwhGaL3/oA7++mch60gnoL6y1q+agUD62GGTAGDMllwMCXzvLVA67LY+EYU4xIpEa/MxoNmGT18Wjekcu7SwUhdaKDYsgmGh10BI7UIlbX7ORK84rBiZPKjcdG2OcPLY1EOW06VmqaP4ZakdDW24uCR/i7mkAIvmf/BBkEYrASeDRHr+KPieC1kO0VaE25Ll+xpN8PLAc1WdkumTBRYnudgMspRmNCvqXUIAMBIBckDMFTrwWtBgZZhU5SqHBNugJyAnUkbxkNSzPBCRBGJ2BYESHyQEQciQmDD5HYGilfrl5SDWA0bnWqERFFptmjpUkYSd0gJra7a1f1rl7au3nnaD4nYiQpckpM8lMOMCH5opz3pYWH/qZ/KicUaDijNDZScb80vXwAGx5Z/kvWsCDGSrFkWM1Q7I5CYGnr51yxa9/U8Fh9sK9EbTbD7XZ1lmofIjIEBoREGjxf3fPA7mIxb03MUGjqGx9uLO7ZGVwJY3zRPEepXQArIIyAtln3yDFU+7YJS6EjIKXlLsIboUGwMDJCpDhjeFsSgek2vnJJd2b9F3h72k3OFExiaPAFQBMCKK2LBee8M5Y0WirMzQ1mTAjDamII41q8rHv8j6uffUf1IPdarYaqHxxvTXofKW1e50xOa8ENqhgZwGic6aTpOZjyrArPEK3BdZyh0cbmHaMxNTJzIBFTQL9NHtYakOFfnz7w5LP7izlOhnNQOItt6OBENH+DwRoJjGB6Ig3jeam2BnLi3BFRADRoHTz+wBYSNIGOTutkTtqyJQ9z0pjcaijDh9NbDAFJK51z+colPZ0YL2wWPSFIdzLDTkMwqvralx5ZKubCeQWiCAsMm++Cwbhkb+sdvn759oUomz4nX+HElGg1NYMuavw7f0J5DQp7jAxjtwy0zVzBUGwwhecSM+Co98Wg0ZR/eWx/tn6DwVegLGEkcxLw5t9taTT9REMAGViz6YZjCoVztmQ08VNDwLY2BaYJRYmxCRpnREyKCQdRoiEDMjzQTZux6HcopPmgQRKHWAaTwJe6WnaWh6PuGTR7dhiJEMqKtwha08nr5r/orGWTU41InSMyA0JgADXip5amvt6/w29SS4FQPqs3mJLIBQOEaf+kI/IvOsGZaZJgqbKSzIormeJAm05u3RUMgkTeZXf+abtUFIOJsbBLamWYU6zx1QW8y+Gx+q9/v7Orq6gUdfImjQ41skfxwu1oUjrAEAvE+Eg0JEEjpwMWD5Un3zlR9o9KHTPeROmrgfUHjQpP+5KQheaJ8ZIgDQi+VAsGKwuCwSQwra3MBUEEnbRRgo4GY5i1Wj7x7lPzORZy1BLdJWKg60pfVJpwmfIVMSlBKmBAXIDWuenG9iNW3XPRBS9/0cCCPtb0VUjFSo58ioCnrG1OVqobn1WaqFhw128cevjJA4CoLRkOC+DMlP5ADGe2rr7uiV17xnMOj6WPrfEGCyyyujgGpcUk5CZYPBlkWrMZHRFfQ9XnpEVCaJHZksUdJlVI5vIEJEKpYEEf9HaBH/qAJbcWgSH4Pq1a0uM6XGsdpfMWr4lBmhSZIU9Jtn5I8G2l0iceM+/Dbz91dNJ3HREl/wRAGijH6IlWhRAFKEYaGNOMO74Hwn36ovMevPi8lg/dBXr52QUpiTE05pOQrCs1z0pMDRWijdhzjr7UP/jFU/azT9s0mhKv8TZQSjuCb9w6+q0f/7Va5lIpc5omfDzGuGyqiEmHn0ju34RDQrmHtMhb0thEtBzKIi+f1DEat7/I1G8j0lr6dNEp6k0vwbdeBkcvgVaDQAcSdxj6LzGl9drVvcG0tDlLGF8B6zTEl3EMt7mMKE0ff/eZr3zxEUNjDcdhRDpgr2tgVc7uaC64ZnLApaYkJqRylB464ogH3/i6bWecUkYhGE3V5OlHi5PXVWZaAXAcnBThm6TCc4gekGVnY+5CRFQaquXcLXdvefCJA5xh4JJg33ubeZKUVICI9Yb/7s/cWW/6grOwq04mwSnpLBhMODQH7eOZO0qTxch+adBro05BC5MEPRrRMdeNcUKFu4Ihej6ddbw++Uj0FHGmzjqGcoyUjirjcLUxhutCaUdrSjB+6mnBkCRtbudakrW6GQNEEIJd/W8XnX3KvIOHJh3OGGMADIBpoLKsX3VgcKsu5VwaXbli/eWX/PXSl8z0VAvNlnBEvpDnqBu6/O7zJ3sLNU9iuxlvVMIl1FBAA+OnNjUwAkSQ0v/s1+/zfZWKedRBKkxrTUCM4d999u5H1h+olnPB7sGEBmBANGiGScwSq0NK55GxnyCY45pGYZZAgGEWHaUHMWBBllWGwUoLfuR5ONArTluHDR9BY7NO5TzNH0RJgDw+d6TUXWVn7aq+YHwN7NgQfI225MDGrzGrox2LQgUhsVrJ3/hfr379ZUcPjzelZo7gCKS1zoEck/mPNo7f9MqXPXbpxQeWLmUtn/u+5owxEk5eFPoX8Wdft+TnH33B45NNhzMd8R1S7bRIFCGhNkSxNKEPhGtdad1Vdv/8yO7//tkTgjOpdJtviZU3RIbE7FNf+fPPb9/Y15v3FRnJVlxcppWk5mKbHA3tIqVbuUa3G4waO+QuBK1uTDIAm2SKbf4L5Cs8ajnlHVQqRAoEx54eDPtNAeWMWp6/dFH3yiU9kSwgtqtvsnadSszuZbQPJyUVR1cl99Ovv/ybV11UKjojY3UppeBIXPTk+T0HCz/cWSxBS880IBz01wqLLpenLXzk/Hn3yJr/zjOfO3/lvslmTgStXBs2MCC/eH0kfV2MlbswFo6B7q7cF/77oYfXH3AE96W1Jsy8IXBVF4Jf9Y0/f/UHDw/0FJSKi702IrCdZ5ElsUTmRAYmaY85lG62/kznQwJL188gCMSwQ5RCUqzbZTBjkQhzOb1iofaVDoaeGSfmgBDGgiIEaPn6+KPm53NCJ6Mo6T3P2sqyNEWqA+klOYEYw4BE9O4rTvjTdW/4uzedWCq6oxPN6ZqUmqrc+/mNW7fvruXzggDzOQ6stNjd8MLqj5fnHtDFXl3ocxh86aL789xT2qTXWrBOmGxSlGCHOjmYwG8GlsYFV6Tf9vE7nt486jocAXyplNKB/5vSFPSoA9HaT/zHfV+++pH+npxUOok7YMMcCfBk4FpovtSa5jdxtnDykBIl8tDnK2JBE7SDVQkzIJq+AbInPDFORBVBpUTVMkgJGEgKAwCR71FgTWV4wp5xwoJ2/NN8uPyqq67CzKc+JxtYw4MGQWnqqRYuPmfla1961PIl3b6vD43Ux6dqoxONA6P+pecOIoq9Q/WzKj89wrlbUENRjnFkTsGrscVdh0jBnduWV1ypCSnuO6QtiRL6VipHNL4IEJHr8Ilp71d3birmxNrV/fmcYJFFW2TUBg89ceADn/v9z2/b2FvNKx0d09gmcY0m1ph8k/DoxAiBQbPTa4w7mYyetNVnVFZ1OqNjM1WMP9G89wgAJH3q76bjV0MgVYEYTL2x9VtwcgoEi1WlXId94t1nBl6/HS3BtdZzOg6zTD/b1QaDhqKIcKGtOyf+/Oiu+x7Z+dhT+1YudFW++Ox+/OLFt7z++Oe8VsXJcXCKgI6qoR4d0bJx8c9e+cT+/orTUprZGkYGgY4MXmTUhUarkRCmzoyhL1W94R975PwLX7DsuLWDCwbLDNnwWO3ZraP3Pbzz0Sf3+YpXK64MhKVtXywwZ1ZND2A0bIhtjT7LXzq2ZrWnS5BM7muk1mCaOpuD39SGWdhNaEKARhPWLKNXnUeeH9e15Clx7V04UwPGg+5/ve6vO7L/np9e4TrMnqZqWxDR9NDh1I0RIZLqzNRCN/EjTcQYxtKQM7XWM5tHr/rBI5v3N/uq7JY3/GRhaVSRYNwFkQdyvUmdb+x/YPu8y37+sjxracoqdxNHbsNBNcr9kDIcjBGRM2x6qtGUCOC4giHzfelL5QosFARDVBqYBUChKbgbDJHGySXZmIhpn2YCica4PxlT1xDzZTHKhU3PzlBEiGyF8HQ/zCQaESFCs0WrFsNrzidPUpDTORx3HhI3/ZEcEawlIXB4rP7Rd532+b8/xzRybZ/qZvHKbS80sR3GjqayCGfLOhGAM0QApbSUWkpdLuXOOHHhFz5wloPNg5POF+87HbGmPZ+kR8oD5jtdouUuOGvF7ncc//hoM59zgDMeqZeDTbkz1bGJEjU7KxDGTiNS6ZzDequ57q5cIcfyOayW3f6eQqnkAqA2uiexy15Q9WH7rFFKTJxse1nrhKGsG4RIibp33BtL4Ms2dTqELLtMY/oTAwCgVteeF2YdWgMTbNPuyJSYAtitmBcvv3BNe8stA7puF/fOOEQisQvTHBnbJIfQFp4MCNCco9bk++rktYPveMU6lOO3bznmlk3Hu/lpJSVqH0gzoVjFlbzvEy/86+rekT3D/uRMo9H0g5pQCMYjP+uIiwwp71SjrMZk1CfQGNQkZTiUoTVJpaTSpJMWJKQ4vtGBTQmWTkZbzBTEJDDRX8PtCE1R3mQmzS7iAhJGmHcaeROayBsaEiP2swrafI7DJuq81kKHg+eBK2DvQdy0G3JOkL0yBjO11qnHLTjx6MFgoDlJ3dvKB37VVVfNhlsndDucJb2ANj/Q1JBA4HNHBKcePf++9QcODNfWDy2+fPXTZbdBmiNjwBjjTGOxBFPnHklLXnjFQFVIpWZq3tRMc6be9FoSCDlnggcGvmh+kqFwR6n5/XZmKEDKDsOwigTLNs86Aow0AlOzMBZWEdsXWwPcUTqEaY0QtAfuzWvBCBI2akxr3Qfvwjj4PmrSa5ZgzsWZBv/tg1BvAGOgFQBwjtN17/MfPvfYIwdCOd/OTxBJKbL7oNTeNc563h1LU7KGRdCoCAL9x788uf/N/3Sbr0uvO27DV1/6G69Z4I5DTokJl3xXTXvuzD4454sweHGz5e3eP7N5x+hTGw8+vWlo++7p/UP18ama7/tCCMfJCc6CYjumUAQ0NXtGDMPWb2zZaurtmFbH8QAERuRatEo8SqTn4+QPjUPdHhFIVDfjzZ+4jWe6H6aeAhp5c7qfjrEPURQtfZ+OXArzBnDDThibAEcEQV1wnJppnXzc/Lt+9IagzE6nJuZqAEAdEUTb4/8cHALmQtbGOGklIqXIcfi//c9D37t5g9s18F8X/fLilU81mkWRz/FcAViOmkKNj5DOiYuv5cV+852aLbn3wNTGbcPrNxzYsG3s0Jg/Pi2HR2eULxNrumBAzzpqzYLE5H5ZeZpRLibVHRmdSQodGJNzI5nStIkjBGSg2qnnaMMJ2YGMMlqzZFmLm0598bAetHzURA4HjkAakSFDRNb09O3ff/WZJy40XQEyHFKCOsv0/j7sIkDEWTCrDpICduOAQCtq+fJvPve79dsnl3eP/frV13QXPA0V7VRA5JAEeRzHD+Ciy/CUT2gpdZg5sdgWJfhz4ODkf13zwE9uWC81I+4QY6FxCJqFfWK5mfJ8iP2rbHKKpfVlTSAZFj6mHXcSdpJxZLIUiOzNZgvqW/CkmSwnNapJ+o8pf+mkNehDMEQMbzEQAggBh8a8//jkhR96y0mxWdDsc1mYyD/j4Z+qNZeO2P6+JkjcVouS1iREqPzy2wd2fuBfb6+r/OuO3frBFzzSW4Kenibk8qAqfrOITQkju9gZX6QlFzItAQURaa2DX9+0Zeia6x656bZHDx4YKxbyyJ1kxAUDiqkAJoBxQo7BqIJZfxhAYBQbGbR3yi1aLplmiNQ2WGbIMYDBAzbmWjPIfLY/pckJM62eYx2R2JQyBiaIbLomYeQVgAyA9NDIzN+/44z/+MT5Zqk5CxMKD7sgOiENcw0ISY0Ssph27Jn4ze83/+H+3Vt3TQ2P1QFkS7tFFwa66mvmDb/ouLFXnDHVP4B6kslD+5nO85f8nNwqaeKCA8DTG/Z+75oHbr3zuZGR6VIBcy5TSZ+GDAGLqMcRCpoiME7IiHFEDiwUyjT+QUOPgMxBlPSQkT2DZklRW7IWpgoEIbRzLA28lcxEJq48TZkoSMsmU0KmBjKsHAE4Z0LwWkP5Sn/iXWd88r2nmbEh+7AwK3XzyOj4aMla/QSHAywzahTcvGPsOz996pa7Nh88NMYZ5HKO4zqIyEBqAl/zlhSK+NLB1rsv2vl3F+1xdcvbsYcvfx0//ZMAsG3n2Le+94frf3n/1LRX7ao4AgN1KWCI1vaJh2sAQFtKgiE2HUFwQW8PGTARrhvkwBghJ8YBORhxpY2Zg5YesJnnQaorR+2BKbb3TUsRxg0nZAhWEADLYCZZCQGbNbb9Y4xaLTlVk8cdveAL/3j2RWctVUojIkOkDhs2JeIfQNdoN+jJUPMlQITnn2bG1sqcMyn1l7/z0H/++LHJab9adh0BSpOO5x0ioc3ASbvhw2QNzjpq4nvv2rJmoNXaPT6y5jPf+J37y18+NjJWrxRQoFbSJ6WAJJICokg/MNA2RKvzlpAxMTLepuCzAt2qYPc4nCGC0jrx22YMkBNjiIwYA+aExxCyiBEMRkRJ8lcDjkwYgUajLCWsYK8ajFl5pk655Q5l2E6EOS5G50SjpRoNuXRh6e2vPf69f3NSV9kNTopI6Y8ymTiUAV3PLWG0W3LZOYT5aqVIcLbnwNR7Pvm7e+7b3lN1hGAdD6iY1kOaMz0+IxYM0vUf3HbSwj2P31974dUvLBfL+VzeVwikIFALBELSRAq1BOUDKdAKtAo5V8GETXLTEZAhIufQaHi1etNxnGpXJZdzWl5rcmJGKVUpFx1HSEURadAwYg+DCgPkQSABxokJYEGCEoUTNI3VKVBBDJ6HjnmxlMpQTFfN0PspYcggA0MzIXJwhngRaEUNTzZa0hHsmDWDV7zsmCtfduRAbwGAlCL7pOicFSSOC1lHRkbmebg0oj1iBrFhw+aRK95/247dY73VfGB6g+ZYeIzZt1VXjqCa5w5U/d9++OEVXdv/45crr7r3jP4K+ZoDKSQdtTZZOCkYH96kQEnSPmoJOlglASdPI2qt1dS0t+aIBS+75Lizz1y9Yll/seA2m97GzQd+e9eTt97x5NS07K6WfaUBdKRficFTsTMqMo/D8NxhDnEHGAfGKTJxmKnLlkeOQM5AcOSMhU1XtAnhZFDtI3IahjabES8iPOJJKdXytecrpalUdFYu6T771CWXnLvqnFMX5VwOAFJqxgAhfS7BHOJ9tCDa3WsPtwKoYyUCWgNjuHn7+MvefuPQSK1Sdnxfod3rR0wVdxZ/BAFdroam8LKT9l33nr96Y97l33vJY/v6y25DqqS+MygpNvcZTYVlDQSCkddskpz5wNvPet/fntfTXWi/qGefO/Cpz9/6+z9s6enJSV/FlovxSWTK2JieR8bsUALaEzKN4orXnV7t7np2y9Ch4YmR0emZump64Png+8pXirRmCBitkmRCI+Fhg9ZaaU3EgqPeEVDpyi8Y6Fqzovv0ExaefsLCdWv6i/lQGkoqYolnJ6XngjrgUVlVRhZSlolAtA0BZ1gLEcHEVOuSN//yuW3D3ZVcyFkCaku4jMTcqr3CR8FBTjTo5o9uedFxBx7+a/my/3qhy1uUkMXNmfuU/3kyR0xEnIHnq1Kp+KOvXXbuaYsAqNH0XYdzztuXxTved83Pf/lwf1+X1DygFhiiUGhJaoHJkwJjhiXQy0FfwsoV8370n1euPXJeveG3Wn6tISdnvMmp5thkY3i0NjbRHB1vzjS8WlPWan6j6bf8QMUKo1VBgrOuitvfW5rfX1m6oLx0YdfSxd2L5pVyTvLlpdTWyI+Z+drdacqiXIDZYEtyiKTUet7Ak6kWqxRxjn/78TuuvemZwb6i72tjCRntm7ayJQlx4RMggTRWc95w4fgP3rEVJnZ95rqVX73vhIGyDB4VtcFHZjfBtN7SWvp+85ffff15Z630fRUYqUkpN2+fmKl7wUErla7XW7Vac9H8rg998qYNGw8WC5ykBNLJ9BhjCGj6V5v1ZbRhKO6GMI61mhQCvveNK1/1shODOwP/R39URBcN8gkyGQGReBxm4c6z01+QDHnBzN+PFV7MONPpNAlSh1t+t/mK9/+6v7voK22YUEPboRZrTlAcJSGeVWXAEX0l5g+27vunRytqYurAxMXfvXjrxGAhINulUhgLPYwFKtBxxOh4458/8oJ/eNcZrZYUgnHObrt3+5d/8NenNuyfmZzkQjDugFYE2pv2fv+rNwsnf8lbbuitgPJ90hKUBO2DlkgySf4SxTSK+iU2SwaICDgDz/d8n/7nP9/+qsuP93zJA7U/+4ZQRERIySoZk2xkzL12ZLSRPe6Z0YfKSgfN4kCk1DSxPQEJUC8rmCfAW8pfgzGs1f0v/OdDeVdo0lZHMi0tFraREYGQIVoshPiDBFNDo7BnuHbMAlZdVPniyze99poF5niLdStMSInCcr7e8Nau6XvPm07WmhhHztmPblj//s/fS+ied+rid772xcWiwxnmXF4s5op596jVfQBw0tHdGzaNlop5pRGcICooUBJIgpagfVISSAEpSsbCLTHvmPGby+UdB9/94Z8TwKsvP97zpONwQ6zN6gIaYQfjoRCMF4sdwhHTcm/YeY7GRFXJLhLN414kNI0U87fd4CcTkiIziJEQ7Fd3bHp646H+3oKUug25I5tGhsjItHJMSqwojWCgWj4bbwlwai2vcv6pw2/buOG/71vbV/Jkhkqy9T0DT42ZWuOyC04sFRzPV45gu/ZPfvqr9wpqLF9c+MZnzlu6sLve8FotT2nQGlqe/8iTexny7u4ugsmgfI5CJEPhAuYgRkW1JOWBbIFugZIhoGIwWKO6ABhDR6i/ff8POXv7Ky47XkodZy/JOkhPB1MqW6YOrej/ZccxZmHY60Zgak6rM5GOICMpNC8pcCi54fZnXYcRJULehm4N2g8wFg+waSPx6RRqlAiNDMQMMqGV86nLNvx+07w94105YU39R+wzJFMihNBxxFknLYWAxIV45x93SpVbMFBQvnzjB2/0lSBS0m8w5JoEaMk4CZGv1Vmh4GjSgCw0aoh66En+ywQyB5wSAIGWpCWpFigPlA8kMZnAYUopxlgu577r73/e01M59wUrfV8JYUmfUtQTjpUgssdJ2vibkHZ9PAw3tl39yFoQNEucaWe+mAJpdj8xcDzbtH1s/YaRUtENCMBmrmjPFCeGK5n9WEqcrzHn6v7yOFCLsUlFC3rWDb76/NYXfs4KOa1l1JeGxBMZjdROEXVVSv19pelaq1b3BOcvPHXRLVe/ApC0Is9XgbcKQxSCLVlQKRZyRFAqis98+c/fvfaJ3mpOKkqo5YlMezjrSSHMisAFMBdFkYCQFGkJWqL2SAXJh9KaXIe3PP3md//gtuvfd9y6RekWgzGe0Y4Btm9LSp0Sc1kNZgxKi/+F1aLAWSqIqI4x/dmC9J7a8s4gxX7w8f3jk/W+7ryMzX2jGj3xe0FrGs0yaIyZ/ZHzVNODVf3jy/tHQHFWKalCD5UK55wIX78pmO9ONxuSuXlMovYbP3AjQ0DuAmqHA2MaGXfcEgADXR+daGkS5SK799orersLgSjA6GQz1Ho2KBE2uzYZD4o02mVyA7mDIgdUCgVASIFSUvlO0ZuanHjze35y103vnzdYCQbnMwFfE0uYE3aMOLezAjvR44JtLaAt8rcPdGb9IEUexaBaf27raMLTs+CnRAjXukYypFaNJxr8FefQlO6Ri4aLXUyKI3m+h0sFNX3CytqyAW/XMOYcCps7bSNlwUJkQM1W67MfOufk4xbmXFEuCdAkOHNcwRirlN2f/XrDJ7/yYK1Wf/cV63q7i54nBWfTM96TG/bnnVDkPHHBSVi+qWyaInNESBpgoYNcADcLEoJEXgFVFvRuGaq/6+N33Hj1awICQ4bswdweM82BztgORaQgitTaYtHgesxcRcyk3SJ2HPg0Wrv7DtVFQGpLJlkT0iLG5LFY7gQjb+doFD5hlSIRonDEicdWVPUYciqkPEBSGit9+qxjvHozMoYNkgVKSKyx4xFDqNVblUrhpHUL1q7qU5r7mo9Py70HZ3btm/rFb5778vfunxgfP+XYgc+8/ywiQsYYZ7+/f+fmbSO5HAuMWJLZbXvCxpSHb1MoisetQt1FAI2kGJCU1NdbuvO+nf/yjfsD+rF5TB52o2OHznWnBRSItGdQIO3ELj4+RHqZBBZgiTWS4SFooJ4YzrJHrkuRPvPEZINhwuw3KEOIacQaMNEbxJR6AzJERrUmP/+44Q+/cQgcxbymVIJzAJBKqsvOHPvpPYsAdBvVgNAaj0RX8GtueOL1Lzvq7z73+6t/8tdSJScVgfJJS8+n/h73tZcc8eVPvbi3u6C0ZghK6W//6DEhBABLvNAS9zBAoLZVQGTZHphi9pbAXuTQrAZ6C9/84SOnn7jwshetUkpzFq3kw7WUU6PYFHenLCafsVojNMIWYst4w+BfhFnPWIKMCJQ5WxYz+Ky2bWQn7fsBsTzlZWfNM4FBBALCdmAlMM1Ep5zX659uXf53hbe8PH/peZjvaUGNQGmW8xf1j/d1z/dV3mHSrJdNFmSwknt7So8/M/bb32+/5NyV61Z1VUq5nCtyrkBGOYetXta/ZlUfAGitAZBz/NdvP/DQE/t7qzmpYsFqTEa5TFakMZaBaUYUpue5LNUPIKCcix/7wr2nHr9gsL+QyDPSrO2kDikFpf6qvRRoqzBna25lZA+dchkDdEz9iibijL3uPbfc+aet1UpOGlBitHeI0vrm9lOMsSRARCZbDX9mFKSseajAWbeG/81lE684d3Jxv3/DndWvXVc5MN070+QUdMMDjTWbjhw0QhlnvqRyHu762RUnHbswE10NsUeAb/zwkX/5+oPFItdSEhjNJrAcSVMRwKwAMxgGhsRzxNtDABACRyZab3n1cd/5wouV0oyx1NZNjeunGdLPg9+aLlljpmO6y9Vm0xjpRHbCp7FjY500AYMF8ytKG8SPKEWIci5KV9FtASyguzVqM4Pl5sKlfVzwfM4lUCOjjR/eVBmaPuW1L61884btTz699bzzeq98/QWIIAQyxoMbqpTWBKRJqmDPo5RaaZqYrD38xL4jV3bnXBH42gbqcYJz5AwAm035L9+6/6v//RfX4Tm3xJDZprbGsEbStTfLrdipnVIALhk6z8msCqFU1FvNX/vrDa+8eM2Lz13eVoUizTod06a8iebHdAoAZEf0tkIthq4NHxbqkMTaH2bBVPGXW728aumbU4Q1UArQSs9uYiLD6KM3feaxfSeuW5tzOZHs7nKJcMFg9ei1A6tXLnByxXt+Xbvplof27x95xxUndejhxe+vAeKuoEd+E5A0YS6XB2AAivwGaABkgrH3vvHEKy878rZ7Nv/3T9ZLTZxzSEx90xqNZLJAIt1rw2odrAk3e/AlEslGAHIEu+rrfz7rlIXFgtNJ2yQh2qcIStalWn5r1Bm3nr1m4VdddRUk34MsisHzDEaMoVb0y99sZEHYJ+u9MFOwEUPOiCeJcwDdhOY4eNPLF/d87O8vuuiCtcevW/LgX/f84S9bJ6bVWaetGBzMg1fLlyo+FnYd8J54eu+alf15l3uNmnDE2Hj9yQ37lPS6q0Xf87TvcYE7d408tH6flNTfmw/8kLmTf3j9gV/duWlion7EiioAI2KCQ7XqzhsonX36ysXzCzffta2QdwOHJoylIYya03JLM4TPKBGzQphlCAKBARJBPse37xzrrubPOmWx0sQQ0/cqk9R+2LHsrEeEc4AvkbTW8VBB587YnAiViF5Lnf/6a5/bNlLIO2QBy2iMtlPsfsIYNpstJWHZET1jI1P+6JBsNRotmhmafv9HXvzFq17x5g/+6q57n+Pamx6f6u52HvrdR5YtH3jLP9xyy907OGJ9unbe6Qtuvuat3dX8D699+Evfe2h8Whcc9un3v/Cdbzodkf7j+w9844cPtZqeI5xPvvcFH3jrqYD4z9968Fs/+Sspr9n0//6tZ3zh4+eT9hhJTaSV1sjcXOn177/1zj/urJZEqFxmSAmbTnpkagZjWm3ILv1TuHOSpEqlusq5P9345gWD5Q57e7YH2Z5MtMuAzDLanxo0Ygl+GffR01887fvbaQkrpXM5/rKLVtcbkjNMT7RHXmwR3504h+nJsVPWdd/8g1dddMbCyaFx32stWlR5/7vO++inLn/NK076+OdvvuXOxytFXLVy8GWXHn/+OWuZk/vMf9xzw6/X95Rx/kBu3ZE9UvnNpvzV7U++82M3Do2Me42JfXsPffuHfwZSN97x3Ke+cp+WkoEaG536rx89TIQ3/27rl65+tJxnXUXeU87f85cd09N1pZSvQAMX+SJDJN36h7cf6/JgpzCTaYDmgLjB+idb1IxSWzIZNSTjiAzripwr9h2q/dc1f80EqWYL+4iZPS7KKgxne0Ojx2QRZA4fCbKiSFzmEhFjbPf+qXNfc12j6TPWrpZlEmpBayiVxC+/96ojVvS95NXffvLJ3f39pWt/8LZTT1rJEHbvnzj70i/XGs3+nuJN1/zdqhXzCzm+9+DUWZd/u1FvVirOj75+5erl/aVijjF28Rv/Z9OWg45L73rjGWtXDC5Z2n/Mmvmvee8vntk8knPpQ2899cjl/YP9XatX9l35oZvXP3NQCPkvH7ngxGMWuS7r6y4RkODMdZ2RQ8NLF+QZZ06+8K5P/PH627b1dDHpKyMIIKDdt7bwFrTY9pnpEhiM+yjqaA05h//pV29atqiLSM8Ft577M4p3e0bkaGNFtImfz549YLrNEjs6BVoDUuqlC7ve+6YTxyfrgidD7TbiQAjAOU7ONK585TEnHDXv4P6RA3sPKq++ZtW8M09ZVZ+Z9v3m5s276xNTzcnWpecfu27tIq8xJZV8ZsOe2kS9NtW64rJjzz1jdXclVyq6G547sGv7sGrJl1147Oc/eulrX37CKccu2H9gdOe23fXJ8bNOWPDRd5/3kguOPO6YwZHxmb0793kz40ev6n/La05et2Zg2cJqzmU5h2ulNj6785c3Pbxzz4STKxCxD771xEoZlVIRVSqgVifygqE8GaRNJ8gQj43EpNCcDTAUSUMnY8fBkYnmj298xkLEYx4u0ewIVWYCgW2d8tTDzThWUsKlOLdcFDMRbIKgxaw1ve+tJ55x4oLJaU84IhHFsJMb31e93bk3vvxoIujpLrtOoVQqPvXktqc37O3qquTcfCmf5+BW8rmnntrVqE1Vilxw7rVa0Go4Wo4NT2vlu1w6Aqenat7MDLRaOVBaa1DNYkGX8lw3JTY9b3LG8zwkr+jKed1CSI95cvzA8MT4pMO9Uo56q25fVeQd/6n1W/IO3/DcIQIuG/V1awuXndM/OToqyAO/AV4N/DrJJmk/CIaAPFGrTQb+AYyxjWgGnNAcICZDm44QAbWictG5/tZnh0ZqgW4C2i7Lc8WwD1dT0Kzwp0Uwh7nN4RzmTEEAgFLB/e4XL+3rKTYaUnBGkYmgecRqgkKxWC7lEJvd3c7CBaXhvSOumysVXdIaAAb6ezxfjoyO7Nt3wJcA3AXA+YNdjfq0V5984KHNLU9zzgD87mrRa80I7t1+19MTEzXXdUjSQH9XpVTM59w//WXb0xv2O25eSqxWu+cN9gHpDRt2PfjoTiaKRERKkpY9vT0XXnBcPs/27hvdumlHszlzYP/I31y+uur6qjYBjVFsDGH9INYOwsxBnDmItYPQHAF/GrQfsZrQsFw3IO42a/dEoC5ujAHmHNy5Z+zG3z6HiFpbIrE056cDc6sQ22DVBOe2BEPm1DydpRsbNU20psH+0inHzb/ld89NzXilgmvOPgYcEMdxRie9M06Yd+SqHlL6zFNXLlk28Il/uPSYoxZo2QQtq9VcqegUCrl/ver1R65ZqKSPIHt6KkPD082G/8mPXn7CccuUJgRdreTXP7lj+46hN1/xgstecjyRIsJ8obBn79hf7t902slL/vbNLyjkudYoHGd6qvaH+54+/ril73/3hV1lJ1QIRUaA3d3VLZv3jo3XxybrC+aXBePHHLNg1+6pR9YfKBRziuVI5IHnUOSBcQAC2QR/BvwZVC0ARO5Q8PN2moGhYYZg6taYuhRABKPjjStecYwjWGa7cvaHjRZaktHXwKjxQYbHRyr6J/oQs0Qe9vy1IgK27ZPPHnrvp373xIaD3WXXcXjkh0uIjAs+Nl5/+YtXXfvtlym/xZ1iQJAm2QxnVpCAF8N3k80A30MhABzpt4TjgvLDFglnrabct39i5cpB0DogrQBpRNy4eWTJ4p5yJUdSBmODKPiuXZN9vaVyxdVSxnmuJs0d5+GHNt7z+42Fcv7iC1ZKcn99z+677tuzbeeUcAQZ8xIR3UsjadISlQeySUTg5FGUiInYVwGhnQDXdjLHSvQMZurerT98/TmnL2mnz/w//olG3Tv2z8KqYrbJrf8dXS/6PKVJcDZT87929UM/vP7xoTEvn3PyLuMiILOTVopz+MMNb1q5rEf6HpFmQfoWC0JrHbDiGGOh6jHpYD4unFOLKjhEAM61lGZbCwhQuEBKK8Uw6QgyxwFSWuqgZxtTXIDhzIx/400PDo22Hnmu/sRzM0PD03kXczmR0vk2BFcYQOifR1qBbKKWwPPEBGbqOBjPJ/auig4XEhzHJpof/NvTv/ixc//PF8QcV01yZOAcaovZ4xXaLXYGqDXlc+LcM5e96pKj5g+WG56cmGpOzXjTtUat3vAlTjXYogVdZ560UCtf8ETmJ/YjQmTBMETU0Q6eODKWlleluDkZsxUQtVLheR414TEQzQmllgzgD0FJVShVHnvq4Nd+umnTjhkgWSoKzhmRaYtgqpCycMacdCioz3PA3RC1jaBayoQJk2+UJB2IhMhrdf9Nr1wnRIbZEeL/AkCeA1KZKFfh85jthCwP1nhUnLK7HhgcE7HFzc69k1t3ju3ZPzk51STkP7xxSy6Hf7n+lTk3MCJm9hRHSvwx60AjS9U2Qz4zi81s6T4EXnVKc9e99Xeb3vXJe7SGnMuC8ETp3luEUTNm4JGUMZIA9gA9pcRigNI8WYygQX3PdVcec+SA1oGtd0Y2kBVsnl/8zv6hSaGbpaJNzWCabnEx3yY+ouz2WDj1qrXWGjjH5YuryxdXjR6p+IfP3/37B3ZfesEKKT3OIkJdnIWZ2tHYXktjRpekDTeOFaQCzV+T/B0saKUVdwsPPr7vHR+/GzTlXCGVxowBOEwUZyixYyNEkzdvK4aZ0jXxzEHICsbY+CJyC+EMxydaz20bDRZE5NA3K50uHtw2SNvmuCbNuZBExtjhYS/TL+owA+AZ0zPxugmm2JRSSmqltOcppfRlFywr5/W1v3oaQASJgtVyzsiiMaMJGzuOBTZYlPIzS6hOocsFmW+HpAkZHxuv/d1n7tEK83mhtDaMqg17pTa2UPyVMsTd0rcAzGnF0J/J8OULslQArbTetmu8U2JI0HEew5qsCWTPDyd0l1oxIVKZobxtD812+nzTfQqyunDtS5oxFhivOw5DxCNW9lx03uo7/rRr++4JJnLacEsBtAM7xjwuiuXvMdZ2jsC/yJvCjmwRuyD2s4+dKoIgwXjuS999eOOW4XKB+VLF3TjT8YDSBFJLtj9r9c7WpkLLRQHMvcY4PzBcz7x9sXcQwGHGdKhzzzOj2jFiMQObZd+Rg2U7S8YC7diOnHTuz6QieyCi+aZXHz8xDb+4fSMAo8B8OIk01M6kwUheOVgcGsiOXWSU/Girx8crDBOnCk3ccbbtHPnZTRt7unK+1GFGS7aANVr5YWLKSBmNjYRMRZQBLFkChgCmiVMgc8T41HQrtR46icZl3F7K0qlOnf4xxaONh8eskzHrA9CGWgiAMWY9I0o3uljn94HYIRMg0EW78AXLjjqi//rbtszUGlwwTWRJf7dnhXakszxT03oFlEkJNd9cawJ0rr/tudGJhiN4jDVA7DeDOAsm1DZcGWgBGMaSGcl+4vyLkBrnDIA/HftDJYEh5fuYddbTLKlGu9mi1W1E69lhVnhI892I2t+9UzFKWaub2hB4RJRKd5XdV7x4+VNPH7zzT7uRuVrbzCRMbzvDcynS10kZplIqwBOY/Qaw9Km5YFJ6d/5xeyHHw7GZZFgotlFF26EcwDYyRkLzAE27HFt30TKUDfSnogwivG6lVbHAwXKEIci6/4c9OGZbE1bTO7k0Zj0/io2igWjWyvVwKSt1IvAQoaEBGPzFq15yRL7g/PTmZ4OpKfueGhE7pTJCRhuV7DrTtjsAIJZYTMUuV6CJkIsduyd37JnI57iOJO3J5E1ThodlwomKJ7KNaogQDAeWTHMma3IXYxI66WD7zB8op4+alIGnneTNzpVKHSKWoVnbw7ItljBWaQ3CGVInwsUcl2EWk8d0FQjsmU48Zt7ZZy6758871m84yEQcJCjxsCEzS0hbsJuVW5qoTGDY28XVfszPJgC2ZefE1LTHGYvFHxOxc0ODPDVuaS3x2NsKjPw1vuvxgR01zYPywpBej8lJgTSCWL28N/MZp+SnobOj9SxbtC07trN+SBWTljiqFani5NZwPYfD9OktuR2y8Inot4OuxxWXrqlPNa+/fXPIiSVLJADRWKft5W96uRAYHgXtHUMKROyiEZahkYZUaKhlR/cgdNkFTSljxPYQaMtetOfhYKgeIQXu7GRAK1G2ikpTuchPOGbQJDZgp43HbGNmiubosQ0OmAWptOM3I/tBYkZ4jydoyYBBMmpcTOscpT41ZWsb/luQWl5ywYqVqwZuunPb0MgME5zswp8MX3AThsVUhmQkPuaIDRCkoMxIAhEAYGamaTRyDTWaKOEz6gtrH6BRB1EqDlPbE4iFBgHBsrZOvj5jUGt6644aOOqIgYBwmt71mQE43qjRPcZ2WAIssw20KwvzMbHk27RDDjGE01bkUKfYMHtxjDbcGe15pfT8gfLLLlq5bdvIzXdtQnS1NoOtHTIpy67GyOiZbagXI5LGQ0LDExxdl5NWybql1EEU2/+lPjwtjJ0spQ4jAWRwYiIj9nBDB2gZZ+C15JtefXzQvcscse3IpjTQa6I2Bg3N9dBnlLrOTLbW82FMPK8EmIxI85qXrs0X+HW3bPQ8yTkn6NDFSFkEAVJWNMUU0o1gKxslOPuCwbLjcE0aIlEjMpBNCoFmSvyb485nQoNKDNosJMuOE2gmy0D2UyQh+EzNP/m4ha996drAsayzV59xt02ri1keGM5mKmP+nHVk5CXSB524GIdbMO1z6WnAAqNTgxHR6cfPf+Gpix5+YujPj+5F7pj1J5phMEuuxDrN0c492yGTqFnHAADUUUf0dVdLoU94lMgSZuUIBrQFYLcvANI6xSngI1Y5SIAoiieSEZG0Ztz90qcvLBZECNDNJXk3baLNWIyZCEx0RrQVrtRxQaRgc3sBJg8GyARxMbM+jkTz0kWbDWkG919pchz+2kuPajXVT25+1pjoT9pdUazttBoI2k9zNMnASW4YQcBMS3/l0u41K7ubTcU5sx0AY84jYarZGb4VGaClleGkWs4UJ6qG6lcklI2Bz83YVPNLnzrvrJMWzokJgTjbTm9rKqUOlwxVoeibszm20q0iDiB1i6zGRzxoHHHzIQt1zCyoXnrhqmXLun5779ZNW0e44+rML5VRPtsd7fjVZAy1U2S5CpanktbAuHjTK9a2WpJzjkblHUGKFD52NKEGO1JiG1RiJt5RjxNDy1Y0Uy7BUSo93VBf/OQFb3/dujYrg86Poy2CJVsIsmn4nY4MTNTWiWECs2THkOQaNdn+dxZGlFnnAKRZ4ZTxQQEnCqVSi+dXLj5n2cj+yRvv2grASWujEKRw9CcRCzdzLcNHjRKp8NiDNzVOGP82Y6hl6w0vP+bs0xZNTDaEYOEwlKEVEwVEu7oi+wAyk9a4haGtDC1U0oj65oFH0NhErVjI/eTrL/vgW06WUlmpAwBk2WFSxrKIVDpMJ+roiMJU1G9/BMkeQJbxus5996zmJ8XeumZqgG1ZKnVe3ZFJFQLA6y5dW6qWb7pz++RUgwtuzJLFRSu2Y+aGih4mVWYaCbDdPWOZRKJcTnzrX17U2+M2mjKyJY6HlMna82ggo+mL0ZDmzADFw8DGXQykdGtNf2LGf+kFa+762esvD2RDOLOqw87dJet+otXhJaMNaOat4fk9G7JJSZXRmZF0+Mkyso/HTKTrMIVGNCtMRGeftuSMU5Y+9ezw7b/fgkwE/QXjtW2uRKk0Eykj3aOkXW6tbsQgpVW+d+SqgR9/7WWOi8GaIJ1gjxht7ejQpECcPgxdZrVtYu0UreEQL0KGTAjGEGZmmuMT9ROOWfizb77yhu+8cvXybhmfFHOQGEtzhAxqHXUCoIjwMK3o8OawCKslmqUqyVy2RJnNLcxKf7BDQRL3C4IvKpV2Hf6Ki1dKr/bTXz0upQLkYEqYYeYIuZlgUIL7U7pPaShjJsNXRMAQpe+dffqyG77zit4qDo9OCYHcwAHRhFsRo0zTNIFNlmos0UmEwWnIBUeEZtMfGa+3PHX26cuu+frld1/7+pdftFJrrWY3xGoHI9pBWjpcyXc4nkrSBSLSbXJIz+8Pwtx8FQx9WlOLL83YYWzH3onzXv2jsfH6bde88byzlkuvkSGWkvihkumdR+kaMQVUomlTgyaihKg1CUds3zXy0X+7564/7hEOL+UdZGG30cqaTEQsloRJ+lRhe1QTSKmbnvI8mc/xVcv7XvTC5a+6ZO2px8+HyJUus6BI6cLOwpHKYEVgm6LF83qaqWHfwzzUdu7N7AzPua4yNKlfnOObPnTrz2/bcvrJi7511XknrxuMpkOex6D8HF7Qxh4iDUqBcADw9nu2/OD6p55+brjZ9AE0GU1azhFtF8Yo3pDW5EvtSy2lVlrmHDHQXzliZe9ZJy284KxlJ6ybHxhbaE0UsXQtfaYsufLDlZ/PW1godeQaTMxgUEfruTw1zERdOpUPs3/p9irZ0EUMNs3Tzw2//N23HRia7q3gqcfOmz/Ylc+JXE64Lnc4Ywwdh7kOE4ILwVyHOYK5jsi5PBC7D/4J9GkFZ1wwJ/qHc8Y5MgacMcFDV3HOkQEBEQvd+qBccnfsmfzUl+/7/Z+3FXJCax2IFgLS5GRDKghB/9Adg3GGrsuLBae3Wpo/WFq+pPuIlT3Hrh08ds3A/MFSfJlSakRkzHKPifCITow3JMM1IlMNwiqd8DC7cvbHfXgavhnb7cI4ESKFNuHxw0a2tkhjmY0xxh5/5tBnv/qn9U/vmZyRmpgmrRSRBk2kNQWWzgbuY6xbjOc6WGBuC4iB9xVjwBgyBMaRM+CcO47DGDKkwGmeM+RCMESv1ZycbkgfHMGIdHAStDxfKfWW15ywZmWvJ8nhzHFYzuVdlXxvNV8p5wZ6i/29xa6Ka129JqU1moxmA9j+f9EOw1kHutNPxN6Hmd6LiT7E4XZ5xCunlGNhh9zkfxvHzCUUHK7bdo3V6hIAlNZSak2kFUmlfV/7vvKlVlJ7Uvu+8hUFCZovSUqSUnu+9qXyfeVLUpqU1lIq31fBa5QKAjtJpVue7/lKaSCiQLNMSaVIkyatQOlQDGf+QPFtrz3hNZeuPdyXJ61DvCH0vsLDHVydY+dhbpNBMDD45JEAGRmGRzinpTanUT7MQgUzDwXDss2YEZhjsDJodgSkFTGGiP+/j7NFmYFSpIOjQoc2S6WiEyxN0h1gmoTW13aeznLxxshJu4yc7V5uPQEyVMoOqz8H2Qsv3TZNe38DorYXU2w7AEA0l7IiS6wkWcWGoniHpBrMZU3aYptZUnDUPlOWmttK7UNz/Dr5NcR2roM1vJHa+sH0adxJo7RvRHwAdvCrIug0WJSyRLB07CzrobSE7iw3s2OObRInTUFFY0HMurbaotnzWpI2aSKpzjJPlgwlHjMVb+vJ/L8dTtBmHG9ebtKooIgWQbPem5Re5FwDftv9zLi9hysjYxZWYhZupXuQNmqJmk3mMOb/B1+SlaXfocmRAAAAAElFTkSuQmCC";
+/* ── 공통 조각 ── */
+const header = (title, sub, back) => `
+  <header class="top">
+    <div class="logo">
+      ${back ? `<button class="mark" id="backBtn" aria-label="뒤로">‹</button>`
+             : ""}
+      <img class="totta" src="${TOTTA}" alt="또타">
+      <div><h1>${esc(title)}</h1><p class="sub">${esc(sub)}</p></div>
+    </div>
+    <div class="linebar">${LINE_COLORS.map(c => `<i style="background:${c}"></i>`).join("")}</div>
+  </header>`;
+
+function toast(msg, ms){
+  const t = $("#toast"); t.textContent = msg; t.classList.add("on");
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("on"), ms || 2000);
+}
+function openSheet(html){ $("#sheetIn").innerHTML = html; $("#sheet").classList.add("on"); }
+function closeSheet(){ $("#sheet").classList.remove("on"); }
+$("#sheet").onclick = e => { if (e.target.id === "sheet") closeSheet(); };
+
+const COPIED_MSG = "✅ 복사됐습니다\n오피스톡에 붙여넣기 하세요";
+async function copyText(t, msg){
+  try{ await navigator.clipboard.writeText(t); toast(msg || COPIED_MSG, 3000); return; }catch(e){}
+  const ta = document.createElement("textarea");
+  ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand("copy"); toast(msg || COPIED_MSG, 3000); }
+  catch(e){ toast("복사하지 못했습니다"); }
+  document.body.removeChild(ta);
+}
+
+/* ══ 목록 화면 ══ */
+function renderList(){
+  screen = "list"; purgeOld();
+  const list = (S.reports||[]).slice().sort((a,b) => dtKey(b.createdAt) - dtKey(a.createdAt));
+
+  app.innerHTML = header("상황보고 도우미", "현장 기록 · 상황보고 자동 작성", false) + `
+    <div class="wrap">
+      ${!S.station ? `<div class="banner" id="setupBanner">📍 내 정보를 먼저 등록하세요<br>
+        <small style="font-weight:600;font-size:15px">역명·노선·성명을 넣으면 보고서에 자동으로 들어갑니다</small></div>` : ""}
+
+      <button class="btn red" id="newBtn" style="margin-bottom:10px">＋ 새 상황보고 작성</button>
+      <div class="row">
+        <button class="btn ghost" id="call119">📞 119 신고</button>
+        <button class="btn ghost" id="meBtn">⚙ 내 정보</button>
+      </div>
+
+      <div class="sec">작성한 보고서 ${list.length ? `(${list.length})` : ""}</div>
+      ${list.length ? `<div class="list">${list.map(r => {
+        const nc = isNoComp(r.accidentType, r.causes, r.alcohol);
+        const reason = nc ? noCompReason(r) : "";
+        return `<button class="item${nc ? " nc" : ""}" data-id="${esc(r.id)}">
+          <span class="t1">${esc(summaryTitle(r))}</span>
+          <span class="t2">${esc(dateWithDay(r.incidentDatetime))}</span>
+          ${nc ? `<span class="tag">※ 미보상 대상${reason ? " · " + esc(reason) : ""}</span>` : ""}
+        </button>`;
+      }).join("")}</div>`
+      : `<div class="empty">아직 작성한 보고서가 없습니다.<br>위 단추를 눌러 시작하세요.</div>`}
+
+      <p class="foot">상황보고 도우미 v1.0<br>
+        개인정보는 12시간 뒤 자동 삭제<br>
+        문의 : nahkyu@seoulmetro.co.kr</p>
+    </div>`;
+
+  $("#newBtn").onclick = () => S.station ? startForm() : openMe(startForm);
+  $("#call119").onclick = dial119;
+  $("#meBtn").onclick = () => openMe();
+  const sb = $("#setupBanner"); if (sb) sb.onclick = () => openMe();
+  document.querySelectorAll("[data-id]").forEach(b =>
+    b.onclick = () => renderDetail(S.reports.find(x => x.id === b.dataset.id)));
+}
+
+function dial119(){
+  openSheet(`<h3>📞 119 신고</h3>
+    <p class="p">바로 전화를 겁니다. 신고 후 <b>119 신고시각</b>을 꼭 기록하세요.</p>
+    <a class="btn red" href="tel:119" style="text-decoration:none;margin-bottom:9px">119 전화 걸기</a>
+    <button class="btn ghost" id="noCall">닫기</button>`);
+  $("#noCall").onclick = closeSheet;
+}
+
+/* ══ 내 정보 ══ */
+function openMe(after){
+  openSheet(`<h3>⚙ 내 정보</h3>
+    <p class="p">보고서에 자동으로 들어갑니다. 한 번만 넣으면 됩니다.</p>
+    <div class="slab">노선</div>
+    <select class="sel" id="iLine">${LINES.map(o =>
+      `<option value="${o === "(선택)" ? "" : esc(o)}"${(o === S.line || (o === "(선택)" && !S.line)) ? " selected" : ""}>${esc(o)}</option>`).join("")}</select>
+    <div class="f${S.station ? " on" : ""}"><span class="bar"></span><span class="in">
+      <span class="lab">역명</span><input id="iStation" value="${esc(S.station)}" placeholder="예) 상일동역"></span><span class="tick">✓</span></div>
+    <div class="f${S.staffName ? " on" : ""}"><span class="bar"></span><span class="in">
+      <span class="lab">이름</span><input id="iName" value="${esc(S.staffName)}" placeholder="예) 홍길동"></span><span class="tick">✓</span></div>
+    <div class="f${S.staffPos ? " on" : ""}"><span class="bar"></span><span class="in">
+      <span class="lab">직책</span><input id="iPos" value="${esc(S.staffPos)}" placeholder="예) 차장"></span><span class="tick">✓</span></div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn ok" id="meSave">저장</button>
+      <button class="btn ghost" id="meNo">닫기</button></div>`);
+
+  $("#meSave").onclick = () => {
+    S.line = $("#iLine").value;
+    S.station = $("#iStation").value.trim();
+    S.staffName = $("#iName").value.trim();
+    S.staffPos = $("#iPos").value.trim();
+    save(); closeSheet(); toast("저장되었습니다");
+    if (after) after(); else renderList();
+  };
+  $("#meNo").onclick = closeSheet;
+}
+
+/* ══ 고르기 창 ══ */
+function pickFrom(label, options, current, onPick){
+  openSheet(`<h3>${esc(label)}</h3>
+    <div class="olist">${options.map(o =>
+      `<button data-v="${esc(o)}" aria-pressed="${o === current}">${esc(o)}</button>`).join("")}</div>
+    <button class="btn ghost" id="pkNo" style="margin-top:14px">닫기</button>`);
+  $("#pkNo").onclick = closeSheet;
+  document.querySelectorAll("[data-v]").forEach(b =>
+    b.onclick = () => { onPick(b.dataset.v); closeSheet(); });
+}
+
+/** 다른 날짜 모드에서 직전에 고른 날짜 (반복 선택 줄이기) */
+let lastPickedDate = "";
+
+/** 시·분 휠 HTML */
+function wheelsHtml(){
+  const col = (id, n) => `<div class="wh" id="${id}"><div class="sp"></div>${
+    Array.from({length:n}, (_, i) => `<div>${pad(i)}</div>`).join("")}<div class="sp"></div></div>`;
+  return `<div class="whs">${col("whH",24)}<b>:</b>${col("whM",60)}</div>`;
+}
+/** 휠을 현재 시각에 맞추고, 값을 읽는 함수를 돌려준다 */
+function bindWheels(){
+  const now = new Date();
+  const setup = (id, v) => {
+    const el = $("#"+id);
+    const mark = () => { const i = Math.round(el.scrollTop / 50);
+      el.querySelectorAll("div:not(.sp)").forEach((d, k) => d.classList.toggle("sel", k === i)); };
+    el.onscroll = mark;
+    // 숫자를 누르면 그 값으로 이동
+    el.querySelectorAll("div:not(.sp)").forEach((d, k) => d.onclick = () => el.scrollTo({top:k*50, behavior:"smooth"}));
+    requestAnimationFrame(() => { el.scrollTop = v * 50; mark(); });
+    return () => Math.max(0, Math.round(el.scrollTop / 50));
+  };
+  const h = setup("whH", now.getHours()), m = setup("whM", now.getMinutes());
+  return () => `${pad(Math.min(23, h()))}:${pad(Math.min(59, m()))}`;
+}
+function dateRow(){
+  const manual = form && form.manualDate;
+  return manual
+    ? `<div class="f on"><span class="bar"></span><span class="in"><span class="lab">날짜</span>
+        <input type="date" id="pkDate" value="${lastPickedDate || todayText()}"></span></div>`
+    : `<p class="p">날짜는 <b>오늘(${todayText()})</b>로 들어갑니다.<br>시각은 <b>지금 시각</b>으로 맞춰져 있으니 그대로면 확인만 누르세요.</p>`;
+}
+function pickedDate(){
+  const el = $("#pkDate");
+  if (!el) return todayText();
+  if (el.value) lastPickedDate = el.value;
+  return el.value;
+}
+
+/** 시각 고르기 — 항상 현재 시각으로 열림 */
+function pickTime(label, current, onPick){
+  openSheet(`<h3>${esc(label)}</h3>${dateRow()}${wheelsHtml()}
+    <div class="row">
+      <button class="btn ghost" id="pkNo2">취소</button>
+      <button class="btn ok" id="pkOk">확인</button></div>
+    ${current ? `<button class="btn ghost" id="pkClr" style="margin-top:10px">입력값 지우기</button>` : ""}`);
+  const read = bindWheels();
+  $("#pkOk").onclick = () => {
+    const dd = pickedDate();
+    if (!dd){ toast("날짜를 넣어주세요"); return; }
+    onPick(`${dd} ${read()}`); closeSheet();
+  };
+  const c = $("#pkClr"); if (c) c.onclick = () => { onPick(""); closeSheet(); };
+  $("#pkNo2").onclick = closeSheet;
+}
+
+/* ══ 작성 화면 ══ */
+function emptyForm(){
+  return {
+    id: "r" + Date.now(), incidentDatetime: nowText(), receivedDateTime: "",
+    staffArrivalDateTime: "", staffCount: "(선택)",
+    line: S.line || "(선택)", station: S.station, staffLabel: myStaffLabel(),
+    locationDetail: "", patientName: "", birthYear: "", ageRange: "(선택)",
+    gender: "(선택)", phone: "010-", guardianPhone: "010-", address: "", accidentType: "(선택)", accidentEtc: "",
+    causes: [], causeEtc: "", alcohol: "(선택)", trainNumber: "",
+    injuries: [], severity: "(선택)",
+    called119: false, report119Time: "", arrival119: "", erTransportTime: "", rescueTeam119: "",
+    called112: false, report112Time: "", arrival112: "", policeTeam112: "",
+    transported: false, hospital: "", selfReturn: false, selfReturnTime: "",
+    notes: "", cctv: "(선택)", timeline: [], personalDataPurged: false, createdAt: ""
+  };
+}
+
+function fixedPlace(){
+  const line = (form.line && form.line !== "(선택)") ? form.line : "";
+  return [line, withStation(form.station)].filter(Boolean).join(" ");
+}
+
+function startForm(src, edit){
+  form = src ? JSON.parse(JSON.stringify(src)) : emptyForm();
+  if (!edit){ form.id = "r" + Date.now(); form.createdAt = ""; }
+  editingId = edit ? src.id : null;
+  if (!edit){
+    // 불러와 새로 작성 : 시각·인적사항은 비우고, 노선·역명은 지금 설정값으로
+    if (src){
+      const e = emptyForm();
+      ["incidentDatetime","receivedDateTime","staffArrivalDateTime","staffCount","patientName","birthYear",
+       "ageRange","gender","phone","guardianPhone","address","alcohol","called119","report119Time","arrival119",
+       "erTransportTime","rescueTeam119","transported","hospital","selfReturn","selfReturnTime",
+       "called112","report112Time","arrival112","policeTeam112","notes","cctv","timeline",
+       "personalDataPurged","line","station","staffLabel"].forEach(k => form[k] = e[k]);
+      form.fromTemplate = true;
+    }
+    form.line = S.line || ""; form.station = S.station; form.staffLabel = myStaffLabel();
+  } else {
+    form.line = form.line || S.line || ""; form.station = form.station || S.station;
+    if (!form.phone) form.phone = "010-";
+    if (!form.guardianPhone) form.guardianPhone = "010-";
+  }
+  // 저장된 「기타(내용)」·「PSD 불량(내용)」을 입력칸으로 되살린다
+  const m = String(form.accidentType||"").match(/^(.+?)\((.*)\)$/);
+  if (m && (m[1] === "기타" || isNoPatient(m[1]))){ form.accidentType = m[1]; form.accidentEtc = m[2]; }
+  form.causes = (form.causes||[]).map(c => {
+    const mm = String(c).match(/^기타\((.*)\)$/);
+    if (mm){ form.causeEtc = mm[1]; return "기타"; }
+    return c;
+  });
+  renderForm(true);
+}
+
+/* 입력칸 만들기 */
+const fText = (key, label, ph, opts = {}) => {
+  const v = form[key] || "";
+  const on = opts.filledOver ? v.length > opts.filledOver : !!v;
+  return `<div class="f${on ? " on" : ""}" data-f="${key}"><span class="bar"></span><span class="in">
+    <span class="lab">${esc(label)}</span>
+    ${opts.area ? `<textarea data-k="${key}" placeholder="${esc(ph)}">${esc(v)}</textarea>`
+      : `<input data-k="${key}" value="${esc(v)}" placeholder="${esc(ph)}"${opts.num ? ' inputmode="numeric"' : ''}${opts.tel ? ' inputmode="tel"' : ''}${opts.max ? ` maxlength="${opts.max}"` : ''}>`}
+    </span><span class="tick">✓</span></div>`;
+};
+const fPick = (key, label) => {
+  const v = form[key] || "";
+  return `<div class="f pick${v ? " on" : ""}" data-pick="${key}" data-label="${esc(label)}">
+    <span class="bar"></span><span class="in"><span class="lab">${esc(label)}</span>
+    <span class="val${v ? "" : " empty"}">${esc(v || "눌러서 선택")}</span></span><span class="tick">✓</span></div>`;
+};
+/** 짧은 선택지 : 한 줄 버튼 (다시 누르면 선택 해제) */
+const fSeg = (key, label, options) => {
+  const v = form[key] || "";
+  const on = v && v !== "(선택)";
+  const opts = options.filter(o => o !== "(선택)");
+  return `<div class="f seg${on ? " on" : ""}" data-seg="${key}">
+    <span class="bar"></span><span class="in"><span class="lab">${esc(label)}</span>
+    <span class="segs">${opts.map(o =>
+      `<button type="button" data-sv="${esc(o)}" aria-pressed="${o === v}">${esc(o)}</button>`).join("")}</span></span></div>`;
+};
+const fChoice = (key, label, options) => {
+  const v = form[key] || "(선택)";
+  const on = v && v !== "(선택)";
+  return `<div class="f pick${on ? " on" : ""}" data-choice="${key}" data-label="${esc(label)}"
+    data-opts="${esc(JSON.stringify(options))}">
+    <span class="bar"></span><span class="in"><span class="lab">${esc(label)}</span>
+    <span class="val${on ? "" : " empty"}">${esc(on ? v : "눌러서 선택")}</span></span><span class="tick">✓</span></div>`;
+};
+const fCheck = (key, label) => `<div class="box"><button class="ck" data-ck="${key}" aria-pressed="${!!form[key]}">
+  <span class="mark">✓</span><span class="txt">${esc(label)}</span></button></div>`;
+const fMulti = (key, items) => `<div class="box">${items.map(it => {
+  const [name, desc] = Array.isArray(it) ? it : [it, ""];
+  const on = (form[key]||[]).some(x => x === name || x.startsWith(name + "("));
+  return `<button class="ck" data-multi="${key}" data-name="${esc(name)}" aria-pressed="${on}">
+    <span class="mark">✓</span><span class="txt">${esc(name)}${desc ? `<small>${esc(desc)}</small>` : ""}</span></button>`;
+}).join("")}</div>`;
+
+function renderForm(toTop){
+  const keepY = window.scrollY;
+  screen = "form";
+  const noPatient = isNoPatient(form.accidentType);
+  const nc = isNoComp(form.accidentType, form.causes, form.alcohol);
+  const ncReason = nc ? noCompReason(form) : "";
+
+  app.innerHTML = header(editingId ? "보고서 수정" : "상황보고 작성",
+    [S.line, S.station].filter(x => x && x !== "(선택)").join(" ") || "내 정보 미등록", true) + `
+    <div class="wrap">
+      ${form.fromTemplate ? `<div class="banner warn">⧉ 불러온 내용입니다<br><small style="font-weight:600;font-size:15px">사고유형·사고원인이 이번 사고와 맞는지 반드시 다시 확인하세요. (미보상 판정에 직결)</small></div>` : ""}
+      ${editingId ? `<div class="banner">✎ 보고서 수정 중<br><small style="font-weight:600;font-size:15px">저장하면 기존 보고서가 바뀝니다</small></div>` : ""}
+      <p class="note">세로띠가 하늘색이면 입력된 항목입니다.</p>
+
+      <div class="sec">발생일시 및 신고접수 시각</div>
+      ${fCheck("manualDate","다른 날짜 사고 입력")}
+      <p class="note">· 날짜는 자동으로 오늘이 들어갑니다.<br>
+        · 시각창은 지금 시각으로 열립니다.<br>
+        · 전날 사고만 위 항목을 체크하세요.</p>
+      ${fPick("incidentDatetime","발생일시")}
+      ${fPick("receivedDateTime","신고접수 시각")}
+      ${fPick("staffArrivalDateTime","직원 도착시각")}
+      ${(() => { const e = elapsedText(form.receivedDateTime, form.staffArrivalDateTime, "신고접수 후");
+                 return e ? `<p class="elapsed">${esc(e)}</p>` : ""; })()}
+      ${fSeg("staffCount","출동 인원",STAFF_COUNT)}
+      <p class="note">※ 2명이면 「홍길동 차장 외 1명」으로 나옵니다.</p>
+
+      <div class="sec">발생위치</div>
+      ${(() => { const fp = fixedPlace();
+        return `<div class="fixed"><span class="lab">노선 · 역명</span>
+          <span class="val${fp ? "" : " empty"}">${esc(fp || "미설정 — 목록화면 「내 정보」에서 설정")}</span></div>`; })()}
+      ${fText("locationDetail","세부 위치","예) 2번 에스컬레이터 상행 중간")}
+      ${recentRow("recentPlace","locationDetail")}
+
+      <div class="sec">사고유형</div>
+      ${fChoice("accidentType","사고유형",ACCIDENT_TYPES)}
+      ${fText("accidentEtc","사고유형 세부내용","기타·PSD 불량일 때 (예: 닫힘 불량)")}
+      ${noPatient ? `<p class="note">※ 시설 고장은 환자·부상 항목이 빠집니다.</p>` : ""}
+
+      ${noPatient ? "" : `
+      <div class="sec">사고원인 / 미보상 판단(참고용)</div>
+      ${fMulti("causes", CAUSES)}
+      ${fText("causeEtc","사고원인 기타","「기타」일 때 직접 입력")}
+      ${nc ? `<div class="flag">※ 구내치료비 <b>미보상 대상</b> (참고용)${ncReason ? `<br>사유 : ${esc(ncReason)}` : ""}</div>`
+            : ((form.causes||[]).length ? `<div class="flag ok">현재 선택으로는 미보상 대상이 아닙니다</div>` : "")}
+
+      <div class="sec">환자 정보</div>
+      ${fText("patientName","환자 성명","미상 입력 가능")}
+      ${fText("birthYear","출생연도","아는 경우 입력 (예: 1965)",{num:true,max:4})}
+      ${(() => { const y = parseInt(form.birthYear,10), now = new Date().getFullYear();
+        return (y >= 1900 && y <= now) ? `<p class="elapsed">▸ ${y}년생 · ${now-y}세 (연나이)</p>` : ""; })()}
+      ${fChoice("ageRange","연령대",AGES)}
+      ${fSeg("gender","성별",GENDERS)}
+      ${fText("phone","연락처","010-0000-0000",{tel:true,filledOver:4})}
+      ${fText("guardianPhone","보호자 연락처","010-0000-0000",{tel:true,filledOver:4})}
+      ${fText("address","주소 · 보호자 / 목격자","예) 상일동 / 보호자 배우자")}
+      ${fSeg("alcohol","음주유무",ALCOHOL)}
+      <p class="note">※ 「음주」면 무조건 미보상으로 판정됩니다.</p>
+
+      <div class="sec">열차번호</div>
+      ${fText("trainNumber","열차번호","예) 2135")}
+
+      <div class="sec">부상 종류</div>
+      ${fMulti("injuries", INJURIES)}
+      <div class="sec">부상정도</div>
+      ${fSeg("severity","부상정도",SEVERITY)}
+      `}
+
+      <div class="sec">119 대응</div>
+      <button class="btn red" id="call119b" style="margin-bottom:10px">📞 119 신고</button>
+      ${fCheck("called119","119 신고함")}
+      ${fPick("report119Time","119 신고시각")}
+      ${fPick("arrival119","119 도착시각")}
+      ${(() => { const e = elapsedText(form.report119Time, form.arrival119, "119 신고 후");
+                 return e ? `<p class="elapsed">${esc(e)}</p>` : ""; })()}
+      ${fPick("erTransportTime","응급실 이송시각")}
+      ${(() => { const e = elapsedText(form.arrival119, form.erTransportTime, "119 도착 후");
+                 return e ? `<p class="elapsed">${esc(e)}</p>` : ""; })()}
+      ${fText("rescueTeam119","출동 구급대","예) 강북구급대 홍길동 외 2명")}
+      ${recentRow("recentRescue","rescueTeam119")}
+      ${fCheck("transported","병원 이송됨")}
+      ${fText("hospital","이송병원","예) 중앙대병원 · 모르면 「응급실」")}
+
+      <div class="sec">112 대응</div>
+      ${fCheck("called112","112 신고함")}
+      ${fPick("report112Time","112 신고시각")}
+      ${fPick("arrival112","112 도착시각")}
+      ${(() => { const e = elapsedText(form.report112Time, form.arrival112, "112 신고 후");
+                 return e ? `<p class="elapsed">${esc(e)}</p>` : ""; })()}
+      ${fText("policeTeam112","출동 지구대","예) 낙성대지구대 홍길동 외 2명")}
+      ${recentRow("recentPolice","policeTeam112")}
+
+      <div class="sec">자진 귀가</div>
+      ${fCheck("selfReturn","자진 귀가함")}
+      ${fPick("selfReturnTime","자진 귀가시각")}
+      <p class="note">※ 신고 없이 승객이 스스로 귀가한 경우<br>체크하면 사고개요에 자동 반영됩니다.</p>
+
+      <div class="sec">발생경위 및 조치내용</div>
+      <p class="note">위에서 넣은 시각은 자동으로 들어갑니다.<br>그 밖의 조치만 「＋ 경위 추가」로 넣으세요.</p>
+      <div class="box" id="tlBox">${(form.timeline||[]).length
+        ? form.timeline.slice().sort((a,b) => dtKey(a.split("|")[0]) - dtKey(b.split("|")[0])).map((raw,i) => {
+            const j = raw.indexOf("|");
+            return `<button class="ck" data-tldel="${esc(raw)}"><span class="mark" style="background:var(--red);border-color:var(--red);color:#fff">✕</span>
+              <span class="txt">${esc(timeOnly(raw.slice(0,j)))} · ${esc(raw.slice(j+1))}</span></button>`;
+          }).join("")
+        : `<p class="note" style="padding:14px">추가된 경위가 없습니다.</p>`}</div>
+      <button class="btn ghost" id="tlAdd">＋ 경위 추가</button>
+
+      <div class="sec">추가 메모</div>
+      ${fText("notes","추가 메모","특이사항을 자유롭게 입력",{area:true})}
+
+      <div class="sec">CCTV 확인 및 저장</div>
+      ${fChoice("cctv","CCTV 확인 및 저장",CCTV)}
+      <p class="note">※ 구내치료비 분쟁 시 가장 중요한 근거입니다.<br>「특이사항」 복사에 함께 들어갑니다.</p>
+
+      <div style="height:22px"></div>
+      <button class="btn ok" id="saveBtn">${editingId ? "수정 완료" : "저장하고 보고서 보기"}</button>
+      <div style="height:10px"></div>
+      <button class="btn ghost" id="cancelBtn">취소</button>
+    </div>`;
+
+  bindForm();
+  window.scrollTo(0, toTop ? 0 : keepY);
+}
+
+/** 최근 사용 목록 */
+function recentRow(key, target){
+  const list = S[key] || [];
+  if (!list.length) return "";
+  return `<div class="chips">${list.map(v =>
+    `<button data-recent="${esc(target)}" data-val="${esc(v)}">${esc(v)}</button>`).join("")}</div>`;
+}
+function rememberRecent(key, value){
+  if (!value) return;
+  const list = (S[key] || []).filter(x => x !== value);
+  list.unshift(value);
+  S[key] = list.slice(0, 5);
+}
+</script>
+<script>
+/* ══ 작성 화면 동작 ══ */
+function bindForm(){
+  // 글자 입력
+  document.querySelectorAll("[data-k]").forEach(el => {
+    el.oninput = (e) => {
+      let v = el.value;
+      const isTel = el.dataset.k === "phone" || el.dataset.k === "guardianPhone";
+      if (isTel) v = formatPhone(v, String(e.inputType||"").startsWith("delete"));
+      form[el.dataset.k] = v;
+      if (el.value !== v) el.value = v;
+      const f = el.closest(".f");
+      const over = isTel ? 4 : 0;
+      f.classList.toggle("on", v.trim().length > over);
+      if (v.trim().length > over) f.classList.remove("miss");
+    };
+  });
+  const by = document.querySelector('[data-k="birthYear"]');
+  if (by) by.onchange = () => {
+    const y = parseInt(by.value, 10), now = new Date().getFullYear();
+    if (y >= 1900 && y <= now){ form.ageRange = ageBandOf(now - y); renderForm(); }
+  };
+  // 시각 고르기
+  document.querySelectorAll("[data-pick]").forEach(el => {
+    el.onclick = () => pickTime(el.dataset.label, form[el.dataset.pick], v => {
+      form[el.dataset.pick] = v; renderForm();
+    });
+  });
+  // 선택지
+  document.querySelectorAll("[data-seg]").forEach(el => {
+    el.querySelectorAll("[data-sv]").forEach(b => b.onclick = () => {
+      const k = el.dataset.seg, v = b.dataset.sv;
+      form[k] = (form[k] === v) ? "(선택)" : v;
+      renderForm();
+    });
+  });
+  document.querySelectorAll("[data-choice]").forEach(el => {
+    el.onclick = () => {
+      const key = el.dataset.choice;
+      pickFrom(el.dataset.label, JSON.parse(el.dataset.opts), form[key], v => {
+        form[key] = v;
+        if (key === "birthYear" || key === "ageRange") {}
+        renderForm();
+      });
+    };
+  });
+  // 체크
+  document.querySelectorAll("[data-ck]").forEach(el => {
+    el.onclick = () => { form[el.dataset.ck] = !form[el.dataset.ck]; renderForm(); };
+  });
+  // 여러 개 고르기
+  document.querySelectorAll("[data-multi]").forEach(el => {
+    el.onclick = () => {
+      const key = el.dataset.multi, name = el.dataset.name;
+      const list = form[key] || [];
+      const i = list.findIndex(x => x === name || x.startsWith(name + "("));
+      if (i >= 0) list.splice(i, 1); else list.push(name);
+      form[key] = list; renderForm();
+    };
+  });
+  // 최근 사용
+  document.querySelectorAll("[data-recent]").forEach(el => {
+    el.onclick = () => { form[el.dataset.recent] = el.dataset.val; renderForm(); };
+  });
+  // 경위 추가·삭제
+  const ta = $("#tlAdd"); if (ta) ta.onclick = askTimeline;
+  document.querySelectorAll("[data-tldel]").forEach(el => {
+    el.onclick = () => { form.timeline = (form.timeline||[]).filter(x => x !== el.dataset.tldel); renderForm(); };
+  });
+
+  const c119 = $("#call119b"); if (c119) c119.onclick = dial119;
+  $("#saveBtn").onclick = saveForm;
+  $("#cancelBtn").onclick = () => {
+    openSheet(`<h3>작성을 취소할까요?</h3><p class="p">입력한 내용이 사라집니다.</p>
+      <div class="row"><button class="btn red" id="cYes">취소하기</button>
+      <button class="btn ghost" id="cNo">계속 작성</button></div>`);
+    $("#cYes").onclick = () => { closeSheet(); renderList(); };
+    $("#cNo").onclick = closeSheet;
+  };
+  const bb = $("#backBtn"); if (bb) bb.onclick = () => $("#cancelBtn").click();
+}
+
+/** 010-0000-0000 꼴로 */
+/** 숫자만 쳐도 010-0000-0000 으로 정리 (지우는 중에는 끝 대시를 붙이지 않음) */
+function formatPhone(raw, deleting){
+  const d = String(raw).replace(/\D/g, "").slice(0, 11);
+  if (!d) return "";
+  let out;
+  if (d.length <= 3) out = d + (d.length === 3 ? "-" : "");
+  else if (d.length <= 7) out = d.slice(0,3) + "-" + d.slice(3) + (d.length === 7 ? "-" : "");
+  else out = d.slice(0,3) + "-" + d.slice(3,7) + "-" + d.slice(7);
+  if (deleting && out.endsWith("-")) out = out.slice(0, -1);
+  return out;
+}
+
+/** 경위 추가 */
+function askTimeline(){
+  openSheet(`<h3>조치내용 추가</h3>${dateRow()}${wheelsHtml()}
+    <div class="f on"><span class="bar"></span><span class="in">
+      <span class="lab">조치내용</span><textarea id="tlTxt" placeholder="예) 휠체어 승객 하차 후 착석"></textarea></span></div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn ghost" id="tlNo">취소</button>
+      <button class="btn ok" id="tlOk">추가</button></div>`);
+  const read = bindWheels();
+  $("#tlOk").onclick = () => {
+    const x = $("#tlTxt").value.trim(), dd = pickedDate();
+    if (!dd){ toast("날짜를 넣어주세요"); return; }
+    if (!x){ toast("조치내용을 넣어주세요"); return; }
+    form.timeline = (form.timeline||[]).concat(`${dd} ${read()}|${x}`);
+    closeSheet(); renderForm();
+  };
+  $("#tlNo").onclick = closeSheet;
+}
+
+/* ══ 저장 ══ */
+function saveForm(){
+  // 「기타」 내용을 값에 합친다
+  const f = form;
+  const r = JSON.parse(JSON.stringify(form));
+  delete r.fromTemplate; delete r.manualDate;
+  const etc = String(f.accidentEtc||"").trim(), cEtc = String(f.causeEtc||"").trim();
+  // 「기타」·「PSD 불량」 선택 시 세부내용을 괄호로 함께 기록
+  if (etc && f.accidentType === "기타") r.accidentType = `기타(${etc})`;
+  else if (etc && isNoPatient(f.accidentType)) r.accidentType = `${f.accidentType}(${etc})`;
+  r.causes = (f.causes||[]).map(c => (c === "기타" && cEtc) ? `기타(${cEtc})` : c);
+  if (String(r.phone||"").replace(/\D/g,"").length < 4) r.phone = "";
+  if (String(r.guardianPhone||"").replace(/\D/g,"").length < 4) r.guardianPhone = "";
+  if (r.patientName || r.phone) r.personalDataPurged = false;
+  r.staffLabel = r.staffLabel || myStaffLabel();
+
+  // ── 미입력 항목 점검 (막지 않고 알려만 준다) ──
+  const missing = [];
+  const need = n => missing.push(n);
+  const unset = v => !v || v === "(선택)";
+  const noPatient = isNoPatient(f.accidentType);
+  if (!f.receivedDateTime) need("신고접수 시각");
+  if (!f.staffArrivalDateTime) need("직원 도착시각");
+  if (unset(f.staffCount)) need("출동 인원");
+  if (!fixedPlace()) need("노선·역명 (내 정보 설정)");
+  if (!String(f.locationDetail||"").trim()) need("세부 위치");
+  if (!noPatient){
+    if (!String(f.patientName||"").trim()) need("환자 성명");
+    if (unset(f.ageRange)) need("연령대");
+    if (unset(f.gender)) need("성별");
+    if (String(f.phone||"").replace(/\D/g,"").length < 10) need("연락처");
+    if (unset(f.alcohol)) need("음주유무");
+  }
+  if (unset(f.accidentType)) need("사고유형");
+  if (f.accidentType === "기타" && !etc) need("사고유형 세부내용");
+  if (!noPatient && !(f.causes||[]).length) need("사고원인");
+  if ((f.causes||[]).includes("기타") && !cEtc) need("사고원인 기타 내용");
+  if (!noPatient){
+    if (!(f.injuries||[]).length) need("부상 종류");
+    if (unset(f.severity)) need("부상정도");
+  }
+  if (f.called119){
+    if (!f.report119Time) need("119 신고시각");
+    if (!f.arrival119) need("119 도착시각");
+    if (!String(f.rescueTeam119||"").trim()) need("출동 구급대");
+  }
+  if (f.transported){
+    if (!f.erTransportTime) need("응급실 이송시각");
+    if (!String(f.hospital||"").trim()) need("이송병원");
+  }
+  if (f.called112){
+    if (!f.report112Time) need("112 신고시각");
+    if (!f.arrival112) need("112 도착시각");
+    if (!String(f.policeTeam112||"").trim()) need("출동 지구대");
+  }
+  if (f.selfReturn && !f.selfReturnTime) need("자진 귀가시각");
+  if (unset(f.cctv)) need("CCTV 확인 및 저장");
+
+  const warn119 = !f.called119 && !noPatient;
+
+  const go = () => {
+    r.createdAt = r.createdAt || nowText();
+    rememberRecent("recentPlace", r.locationDetail);
+    rememberRecent("recentRescue", r.rescueTeam119);
+    rememberRecent("recentPolice", r.policeTeam112);
+    S.reports = (S.reports||[]).filter(x => x.id !== r.id);
+    S.reports.push(r);
+    save();
+    const nc = isNoComp(r.accidentType, r.causes, r.alcohol);
+    toast(nc ? (editingId ? "수정 완료 · 미보상 대상입니다 (참고용)" : "저장 완료 · 미보상 대상입니다 (참고용)")
+             : (editingId ? "수정되었습니다" : "저장되었습니다"));
+    renderDetail(r);
+  };
+
+  if (!missing.length && !warn119){ go(); return; }
+
+  // 미입력 항목 → 화면의 해당 칸
+  const keyOf = {"신고접수 시각":"receivedDateTime","직원 도착시각":"staffArrivalDateTime","출동 인원":"staffCount",
+    "세부 위치":"locationDetail","환자 성명":"patientName","연령대":"ageRange","성별":"gender","연락처":"phone",
+    "음주유무":"alcohol","사고유형":"accidentType","사고유형 세부내용":"accidentEtc","사고원인":"causes",
+    "사고원인 기타 내용":"causeEtc","부상 종류":"injuries","부상정도":"severity","119 신고시각":"report119Time",
+    "119 도착시각":"arrival119","출동 구급대":"rescueTeam119","응급실 이송시각":"erTransportTime","이송병원":"hospital",
+    "112 신고시각":"report112Time","112 도착시각":"arrival112","출동 지구대":"policeTeam112",
+    "자진 귀가시각":"selfReturnTime","CCTV 확인 및 저장":"cctv"};
+  const elOf = name => {
+    if (name.startsWith("노선")) return document.querySelector(".fixed");
+    const k = keyOf[name];
+    if (!k) return null;
+    const one = document.querySelector(`[data-f="${k}"],[data-pick="${k}"],[data-choice="${k}"],[data-seg="${k}"]`);
+    if (one) return one;
+    const m = document.querySelector(`[data-multi="${k}"]`);
+    return m ? (m.closest(".box") || m) : null;
+  };
+  const posOf = el => el ? el.getBoundingClientRect().top + window.scrollY : 1e9;
+  // 화면 위에서부터 순서대로
+  const items = missing.map(n => ({ n, el: elOf(n) })).sort((x, y) => posOf(x.el) - posOf(y.el));
+  if (warn119){
+    const c = document.querySelector('[data-ck="called119"]');
+    items.push({ n: "119 신고함", el: c ? (c.closest(".box") || c) : null, warn: true });
+    items.sort((x, y) => posOf(x.el) - posOf(y.el));
+  }
+
+  openSheet(`<h3>저장 전 확인</h3>
+    ${warn119 ? `<div class="flag">⚠ 「119 신고함」이 체크되지 않았습니다.</div>` : ""}
+    ${missing.length ? `<p class="p"><b>미입력 항목 ${missing.length}개</b><br>${items.filter(i => !i.warn).map(i => "· " + esc(i.n)).join("<br>")}</p>` : ""}
+    <div class="row">
+      <button class="btn ghost" id="sBack">돌아가서 입력</button>
+      <button class="btn ok" id="sGo">이대로 저장</button></div>`);
+  $("#sBack").onclick = () => {
+    closeSheet();
+    // 빈 칸 전부 주황 테두리로 표시하고, 가장 위의 빈 칸으로 이동
+    items.forEach(i => { if (i.el) i.el.classList.add("miss"); });
+    const first = items.find(i => i.el);
+    if (first){
+      const y = posOf(first.el) - 120;
+      window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+      const inp = first.el.querySelector("input,textarea");
+      if (inp) setTimeout(() => inp.focus({ preventScroll: true }), 450);
+    }
+  };
+  $("#sGo").onclick = () => { closeSheet(); go(); };
+}
+
+/* ══ 결과 화면 ══ */
+function renderDetail(r){
+  if (!r){ renderList(); return; }
+  screen = "detail";
+  const nc = isNoComp(r.accidentType, r.causes, r.alcohol);
+  const reason = nc ? noCompReason(r) : "";
+
+  app.innerHTML = header("상황보고", dateWithDay(r.incidentDatetime), true) + `
+    <div class="wrap">
+      ${nc ? `<div class="flag">※ 구내치료비 <b>미보상 대상</b> (참고용)${reason ? `<br>사유 : ${esc(reason)}` : ""}<br>
+        <span style="font-weight:600;font-size:15px">특이사항에 참고용으로 자동 기재됩니다</span></div>` : ""}
+      ${r.personalDataPurged ? `<div class="banner warn">🔒 작성 후 12시간이 지나 개인정보가 자동 삭제되었습니다</div>` : ""}
+
+      <div class="sec">상황보고 전체</div>
+      <div class="out" style="margin-top:0">${esc(buildCombined(r))}</div>
+      <button class="cpy" data-cp="combined" style="background:var(--blue);margin-top:10px"><span class="no" style="width:auto;min-width:0;padding:0 10px;margin-right:12px">1+2+3</span>
+        <span class="nm">한번에 복사</span><span class="go">복사 ›</span></button>
+      <p class="note">메모장에 붙여넣고 메트로넷 각 칸에 나눠 옮기세요.</p>
+
+      <div class="sec">특이사항</div>
+      <div class="out" style="margin-top:0">${esc(buildNotes(r))}</div>
+      <button class="cpy" data-cp="notes" style="margin-top:10px"><span class="no">4</span>
+        <span class="nm">특이사항 복사</span><span class="go">복사 ›</span></button>
+
+      ${isNoPatient(r.accidentType) ? "" : `<div class="sec">환자 정보</div>
+      <div class="out" style="margin-top:0">${esc(buildPatient(r))}</div>`}
+
+      <div class="sec">칸별로 따로 복사</div>
+      <p class="note">메트로넷 칸에 하나씩 붙여넣을 때 쓰세요.</p>
+      <button class="cpy" data-cp="title"><span class="no">1</span>
+        <span class="nm">제목</span><span class="go">복사 ›</span></button>
+      <button class="cpy" data-cp="summary"><span class="no">2</span>
+        <span class="nm">사고개요</span><span class="go">복사 ›</span></button>
+      <button class="cpy" data-cp="timeline"><span class="no">3</span>
+        <span class="nm">발생경위 및 조치내용</span><span class="go">복사 ›</span></button>
+
+      <div class="sec">전체 입력 내용</div>
+      <div class="out" style="margin-top:0">${esc(compactReport(buildFullReport(r)))}</div>
+      <button class="btn" id="allBtn" style="margin-top:10px">📋 전체 보고서 복사</button>
+      <div style="height:10px"></div>
+      <div class="row">
+        <button class="btn ghost" id="editBtn" style="flex:0 0 30%;min-width:0;padding-left:4px;padding-right:4px">✎ 수정</button>
+        <button class="btn ghost" id="copyAsBtn" style="flex:1;min-width:0;white-space:nowrap;letter-spacing:-.4px;padding-left:4px;padding-right:4px">⧉ 이 형식으로 새로 작성</button>
+      </div>
+      <div style="height:10px"></div>
+      <button class="btn ghost" id="delBtn" style="color:#ffb4b4">🗑 이 보고서 삭제</button>
+      <div style="height:10px"></div>
+      <button class="btn ghost" id="listBtn">목록으로</button>
+    </div>`;
+
+  const parts = {
+    combined: buildCombined(r),
+    title: summaryTitle(r),
+    summary: buildSummary(r),
+    timeline: buildTimeline(r),
+    notes: buildNotes(r)
+  };
+  const names = {combined:"제목·개요·경위", title:"제목", summary:"사고개요", timeline:"발생경위 및 조치내용", notes:"특이사항"};
+  document.querySelectorAll("[data-cp]").forEach(b =>
+    b.onclick = () => copyText(parts[b.dataset.cp], COPIED_MSG));
+
+  $("#allBtn").onclick = () => copyText(buildFullReport(r), COPIED_MSG);
+  $("#editBtn").onclick = () => startForm(r, true);
+  $("#copyAsBtn").onclick = () => {
+    openSheet(`<h3>불러와 새로 작성</h3>
+      <p class="p">이 보고서 내용을 그대로 가져옵니다.<br>
+        <b>사고유형·사고원인이 이번 사고와 맞는지 반드시 다시 확인하세요.</b><br>
+        (미보상 판정에 직결됩니다)</p>
+      <div class="row"><button class="btn ok" id="cpYes">가져오기</button>
+      <button class="btn ghost" id="cpNo">취소</button></div>`);
+    $("#cpYes").onclick = () => { closeSheet(); startForm(r, false); };
+    $("#cpNo").onclick = closeSheet;
+  };
+  $("#delBtn").onclick = () => {
+    openSheet(`<h3>이 보고서를 지울까요?</h3>
+      <p class="p">${esc(summaryTitle(r))}</p>
+      <div class="row"><button class="btn red" id="dYes">지우기</button>
+      <button class="btn ghost" id="dNo">취소</button></div>`);
+    $("#dYes").onclick = () => {
+      S.reports = (S.reports||[]).filter(x => x.id !== r.id);
+      save(); closeSheet(); toast("삭제되었습니다"); renderList();
+    };
+    $("#dNo").onclick = closeSheet;
+  };
+  $("#listBtn").onclick = renderList;
+  $("#backBtn").onclick = renderList;
+  window.scrollTo(0, 0);
+}
+
+/* ══ 시작 ══ */
+load();
+purgeOld();
+renderList();
+</script>
+</body>
+</html>
